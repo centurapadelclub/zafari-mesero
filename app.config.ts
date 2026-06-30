@@ -1,0 +1,69 @@
+import { ExpoConfig, ConfigContext } from 'expo/config';
+
+/**
+ * Configuración dinámica de Expo.
+ *
+ * Valores sensibles / específicos del entorno se leen de variables de entorno
+ * (.env). Para que estén disponibles en el bundle del cliente usan el prefijo
+ * EXPO_PUBLIC_ (ver .env.example).
+ *
+ * El archivo google-services.json (lo descargas de Firebase) NO se commitea.
+ * Por defecto se busca en la raíz del proyecto; puedes sobreescribir la ruta
+ * con la variable GOOGLE_SERVICES_JSON.
+ */
+export default ({ config }: ConfigContext): ExpoConfig => ({
+  ...config,
+  name: 'Zafari Mesero',
+  slug: 'zafari-mesero',
+  scheme: 'zafarimesero',
+  version: '1.0.0',
+  orientation: 'portrait',
+  icon: './assets/icon.png',
+  userInterfaceStyle: 'light',
+  ios: {
+    supportsTablet: true,
+    bundleIdentifier: 'com.zafari.mesero',
+  },
+  android: {
+    package: 'com.zafari.mesero',
+    // google-services.json se genera en Firebase (ver pasos en el README).
+    // Solo es necesario al compilar el dev build / producción, no para `expo start`.
+    googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
+    adaptiveIcon: {
+      backgroundColor: '#D32F2F',
+      foregroundImage: './assets/android-icon-foreground.png',
+      backgroundImage: './assets/android-icon-background.png',
+      monochromeImage: './assets/android-icon-monochrome.png',
+    },
+    predictiveBackGestureEnabled: false,
+    // Permisos necesarios para notificaciones insistentes tipo "llamado":
+    permissions: [
+      'android.permission.POST_NOTIFICATIONS', // Android 13+ requiere pedir permiso de notificaciones
+      'android.permission.VIBRATE', // patrón de vibración insistente
+      'android.permission.WAKE_LOCK', // despertar la pantalla al llegar el llamado
+      'android.permission.USE_FULL_SCREEN_INTENT', // heads-up a pantalla completa con el celular bloqueado
+      'android.permission.RECEIVE_BOOT_COMPLETED',
+    ],
+  },
+  web: {
+    favicon: './assets/favicon.png',
+  },
+  plugins: [
+    [
+      'expo-notifications',
+      {
+        // Color del ícono pequeño de la notificación en Android.
+        color: '#D32F2F',
+        // Permite que las notificaciones despierten la app en segundo plano.
+        enableBackgroundRemoteNotifications: true,
+      },
+    ],
+  ],
+  extra: {
+    eas: {
+      // Se completa automáticamente al correr `eas init`. Necesario solo si
+      // decides usar el servicio de push de Expo en vez de FCM directo.
+      projectId: process.env.EAS_PROJECT_ID ?? undefined,
+    },
+  },
+});
