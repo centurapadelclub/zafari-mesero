@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { savePushToken } from '../lib/notifications';
 import { Asignacion, Id, Mesero, Zona } from '../types/db';
 
 /** Datos de la sesión del mesero que persistimos localmente. */
@@ -39,6 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  // Registrar/actualizar el token FCM cuando hay un mesero logueado
+  // (cubre tanto el login como la restauración de sesión al reabrir la app).
+  useEffect(() => {
+    if (session?.id != null) {
+      savePushToken(session.id);
+    }
+  }, [session?.id]);
 
   const signIn = useCallback(async (nombre: string, pin: string) => {
     const nombreLimpio = nombre.trim();

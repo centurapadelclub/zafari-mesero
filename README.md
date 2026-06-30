@@ -195,6 +195,77 @@ heads-up MAX que despierta la pantalla + vibración insistente al abrir/estando 
 app activa. Si necesitás el comportamiento alarma-total con la app cerrada, se
 puede agregar con un dev build y un pequeño módulo nativo — decime y lo armamos.
 
+## 📲 Pipeline de push (FCM) — setup completo
+
+Cómo viaja un llamado hasta el celular del mesero:
+
+```
+INSERT en llamados/pedidos
+   └─ Database Webhook (Supabase)
+        └─ Edge Function `notify-llamado`
+             ├─ ubicacion → zonas.id → asignaciones → meseros
+             ├─ push_tokens de esos meseros
+             └─ FCM v1 (canal "llamados", prioridad alta) → 📱 heads-up + vibración
+```
+
+La app registra su token FCM en `push_tokens` al loguearse
+(`savePushToken` en `src/lib/notifications.ts`, llamado desde `AuthContext`).
+
+### A. Firebase (lo hacés vos en la consola)
+
+1. <https://console.firebase.google.com> → creá el proyecto.
+2. **Add app → Android**, package name **`com.zafari.mesero`**.
+3. Descargá **`google-services.json`** → ponelo en la raíz del repo (gitignoreado).
+4. **Project Settings → Cloud Messaging**: confirmá que **FCM API (V1)** esté habilitada.
+5. **Project Settings → Service accounts → Generate new private key** → guardá ese
+   JSON (es secreto). Es el que la Edge Function usa para enviar (paso C).
+
+### B. Tabla de tokens (SQL)
+
+Corré `supabase/sql/push_tokens.sql` en **Supabase → SQL Editor**.
+
+### C. Desplegar la Edge Function
+
+Con la [Supabase CLI](https://supabase.com/docs/guides/cli):
+
+```bash
+supabase login
+supabase link --project-ref uongnbktkghwkkwllcxa
+
+# Secreto: el JSON del service account de Firebase (paso A.5)
+supabase secrets set FCM_SERVICE_ACCOUNT="$(cat ruta/a/service-account.json)"
+# Opcional pero recomendado: secreto compartido con el webhook
+supabase secrets set WEBHOOK_SECRET="un-valor-largo-al-azar"
+
+# Deploy (sin verificación de JWT: la protege el WEBHOOK_SECRET)
+supabase functions deploy notify-llamado --no-verify-jwt
+```
+
+(`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` las inyecta Supabase sola.)
+
+### D. Database Webhooks
+
+En **Supabase → Database → Webhooks → Create**, creá DOS webhooks (uno por tabla):
+
+- **Tabla:** `llamados` / **Eventos:** `INSERT` → **HTTP POST** a la URL de la función
+  `https://uongnbktkghwkkwllcxa.functions.supabase.co/notify-llamado`
+- **Tabla:** `pedidos` / **Eventos:** `INSERT` → misma URL.
+
+En ambos, agregá el header **`x-webhook-secret`** con el mismo valor que
+`WEBHOOK_SECRET`. (Si no usaste secreto, omitilo.)
+
+### E. Probar
+
+1. Build de desarrollo en un Android físico (`eas build --profile development -p android`).
+2. Logueate (se registra el token).
+3. Insertá un `llamado` de prueba en una `ubicacion` de una zona asignada a ese
+   mesero → debería llegar el heads-up con vibración.
+
+> **Recordá el límite Android documentado abajo:** el push llega como heads-up MAX
+> (despierta la pantalla); la vibración insistente 5s/5s la mantiene la app al
+> abrirse. El modo "alarma a pantalla completa con app cerrada" necesita un módulo
+> nativo extra.
+
 ## 🔐 Nota de seguridad sobre el PIN
 
 El login compara el PIN en texto plano contra `meseros.pin`. Si en la BD el PIN

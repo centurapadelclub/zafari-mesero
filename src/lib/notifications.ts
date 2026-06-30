@@ -1,6 +1,8 @@
 import { Platform, Vibration } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { supabase } from './supabase';
+import { Id } from '../types/db';
 
 /**
  * Configuración de notificaciones para la app del mesero.
@@ -146,4 +148,41 @@ export function stopInsistentVibration(): void {
 
 export function isVibrating(): boolean {
   return vibrating;
+}
+
+// ---- Registro del token FCM en Supabase ----
+
+/**
+ * Obtiene el token FCM del dispositivo y lo guarda en la tabla `push_tokens`,
+ * asociado al mesero logueado. El backend (Edge Function notify-llamado) usa
+ * estos tokens para enviar el push por FCM.
+ *
+ * Idempotente: hace upsert por `token` (si el mismo dispositivo lo usa otro
+ * mesero, se actualiza el mesero_id). Falla en silencio (no rompe el login).
+ */
+export async function savePushToken(meseroId: Id): Promise<void> {
+  try {
+    const token = await getFcmDeviceToken();
+    if (!token) return;
+
+    const { error } = await supabase
+      .from('push_tokens')
+      .upsert(
+        {
+          mesero_id: meseroId,
+          token,
+          platform: Platform.OS,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'token' },
+      );
+
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn('[notifications] No se pudo guardar el token push:', error.message);
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[notifications] Error registrando token push:', err);
+  }
 }
