@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "269641011771",
+    "project_id": "zafari-mesero",
+    "storage_bucket": "zafari-mesero.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:269641011771:android:2f78e7dc8e9d70e81d821e",
+        "android_client_info": {
+          "package_name": "com.zafari.mesero"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD__q188dlsgIUpcE8Z1RshfF2eNnwyxL4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
