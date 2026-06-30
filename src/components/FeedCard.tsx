@@ -34,6 +34,7 @@ export function FeedCard({ item, onAtendido, busy, modo = 'pendiente' }: Props) 
             <Text style={styles.badgeText}>
               {esLlamado ? 'LLAMADO' : 'PEDIDO'}
               {esLlamado && item.tipo ? ` · ${item.tipo}` : ''}
+              {!esLlamado && item.estado === 'en_preparacion' ? ' · EN PREPARACIÓN' : ''}
             </Text>
           </View>
         </View>

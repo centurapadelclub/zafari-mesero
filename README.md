@@ -110,38 +110,64 @@ está centralizado en `src/types/db.ts`, `src/hooks/useFeed.ts` y
 
 **Cómo filtra el feed por zona:** `meseros → asignaciones.zona_id → zonas.nombre`,
 y luego `llamados/pedidos WHERE ubicacion IN (nombres de zonas del mesero)`.
+(Confirmado: `ubicacion` es el mismo texto exacto que `zonas.nombre`, ej.
+`'Cancha 1'`, `'Mesa 25'`, `'BYT Studio'`.)
 
-### 🔴 2 suposiciones que NO pude verificar (egress bloqueado, ver abajo)
+### Estados (confirmados) y flujo de "Atendido"
 
-1. **`ubicacion` == `zonas.nombre`.** Como `llamados`/`pedidos` no tienen columna
-   de zona, asumo que `ubicacion` guarda el nombre de la zona. Si `ubicacion` es
-   más granular (ej. "Mesa 5") el filtro por zona no va a matchear — decime un par
-   de valores reales de `ubicacion` y de `zonas.nombre` y lo ajusto.
-2. **Valores de `estado`** = `'pendiente'` / `'atendido'` (constantes
-   `ESTADO_PENDIENTE`/`ESTADO_ATENDIDO` en `src/types/db.ts`). Si usás otros
-   (`pending`/`done`, etc.), cambialos ahí.
+Definidos en `src/types/db.ts`:
 
-### Limitaciones del esquema que ya manejé en el código
+- **llamados** → `pendiente` → `atendido`. El botón "Atendido" lo pasa a `atendido`.
+- **pedidos** → `pendiente` → `en_preparacion` → `entregado`.
+  - El panel muestra los pedidos **activos** (`pendiente` + `en_preparacion`).
+  - El botón "Atendido" en un pedido lo marca **`entregado`**.
+  - La **vibración insistente** se dispara solo por items en `pendiente` (un
+    pedido en `en_preparacion` se ve en la lista pero no mantiene la vibración).
 
-- `pedidos` **no tiene `atendido_at`**: al marcar atendido solo se actualiza
-  `estado`; el historial de pedidos se filtra por `created_at` del día. Si querés
-  hora exacta de atención, conviene agregar `atendido_at` (timestamptz) a `pedidos`.
-- Ni `llamados` ni `pedidos` tienen `mesero_id`: no se registra QUÉ mesero atendió.
-  Si lo necesitás, agregá esa columna y lo seteo en el "Atendido".
+  ¿Querés otro comportamiento? Cambialo en un solo lugar:
+  `PEDIDO_ESTADOS_ACTIVOS` (qué muestra el panel) y `PEDIDO_ESTADO_AL_ATENDER`
+  (a qué estado pasa el botón) en `src/types/db.ts`.
+
+### ⚠️ Migración SQL requerida (corré esto en Supabase antes de usar la app)
+
+La app registra **quién** atendió y **cuándo** atendió cada item. Para eso faltan
+columnas. Corré esto en **Supabase → SQL Editor**:
+
+```sql
+-- 1) Hora de atención en pedidos (llamados ya tiene atendido_at).
+alter table public.pedidos add column if not exists atendido_at timestamptz;
+
+-- 2) Qué mesero atendió, en ambas tablas.
+--    ⚠️ El tipo de mesero_id DEBE coincidir con el tipo de meseros.id.
+--    Versión para meseros.id = uuid (lo más común en Supabase):
+alter table public.llamados add column if not exists mesero_id uuid references public.meseros(id);
+alter table public.pedidos  add column if not exists mesero_id uuid references public.meseros(id);
+
+--    👉 Si meseros.id es bigint/int8 (identity), usá ESTAS dos en su lugar:
+-- alter table public.llamados add column if not exists mesero_id bigint references public.meseros(id);
+-- alter table public.pedidos  add column if not exists mesero_id bigint references public.meseros(id);
+```
+
+> ¿No sabés el tipo de `meseros.id`? Corré `npm run check:db` (te lo muestra) o
+> mirá la tabla en el dashboard. Si dudás, en Supabase casi siempre es `uuid`.
+
+Tras la migración, asegurate de que tus **policies de RLS de UPDATE** sobre
+`llamados`/`pedidos` permitan a la `anon` key escribir `estado`, `atendido_at` y
+`mesero_id` (normalmente la misma policy que ya permite marcar atendido alcanza).
 
 ### ✅ Verificación en 1 comando (corré esto en tu red)
 
 No pude probar contra tu base porque **el entorno donde trabajo bloquea el host de
 Supabase** por política de egress (`uongnbktkghwkkwllcxa.supabase.co` → 403). Para
-validar login + Realtime + las 2 suposiciones de arriba, en tu compu:
+validar login + Realtime contra tu base real, en tu compu:
 
 ```bash
 npm run check:db    # = node --env-file=.env scripts/check-db.mjs
 ```
 
 Te dice: cuántas zonas/meseros lee (valida RLS de SELECT), los valores reales de
-`estado` y `tipo`, y **si las `ubicacion` coinciden con `zonas.nombre`**, además de
-probar que Realtime conecte. No modifica datos. Pegame la salida y ajusto lo que haga falta.
+`estado` y `tipo`, que las `ubicacion` coinciden con `zonas.nombre`, y prueba que
+Realtime conecte. No modifica datos. Pegame la salida y confirmamos.
 
 > Alternativa: si agregás `uongnbktkghwkkwllcxa.supabase.co` a la allowlist de
 > egress de este entorno, corro la verificación yo mismo desde acá.

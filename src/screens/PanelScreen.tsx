@@ -21,10 +21,11 @@ export function PanelScreen() {
     requestNotificationPermissions();
   }, []);
 
-  // Vibración insistente mientras haya llamados/pedidos pendientes.
-  // Se detiene sola cuando la lista queda vacía (todo atendido).
+  // Vibración insistente mientras haya items en 'pendiente' (un pedido ya
+  // 'en_preparacion' se ve en la lista pero NO mantiene la vibración).
+  const pendientesCount = items.filter((i) => i.estado === 'pendiente').length;
   useEffect(() => {
-    if (items.length > 0) {
+    if (pendientesCount > 0) {
       startInsistentVibration();
     } else {
       stopInsistentVibration();
@@ -33,7 +34,7 @@ export function PanelScreen() {
       // Al desmontar (logout / cambio de pantalla) cortamos la vibración.
       stopInsistentVibration();
     };
-  }, [items.length]);
+  }, [pendientesCount]);
 
   const onAtendido = async (item: FeedItem) => {
     setBusyId(item.id);

@@ -3,21 +3,31 @@
  *
  * Relación mesero → zonas → llamados/pedidos:
  *   meseros 1—* asignaciones *—1 zonas        (asignaciones.zona_id -> zonas.id)
- *   zonas.nombre  ==  llamados.ubicacion / pedidos.ubicacion   ⚠️ (ver abajo)
- *
- * ⚠️ SUPOSICIÓN IMPORTANTE (no pude verificarla en vivo, ver README):
- *   Los `llamados` y `pedidos` NO tienen columna de zona; solo `ubicacion`.
- *   Asumo que `ubicacion` contiene el NOMBRE de la zona (zonas.nombre), así que
- *   el feed del mesero filtra por `ubicacion IN (nombres de sus zonas)`.
- *   Si `ubicacion` es más granular (ej. "Mesa 5") y la zona se deriva de otra
- *   forma, decime un par de valores reales y lo ajusto.
+ *   zonas.nombre  ==  llamados.ubicacion / pedidos.ubicacion   ✔ confirmado
+ *   (ej. 'Cancha 1', 'Mesa 25', 'BYT Studio' — mismo texto exacto)
  */
 
-// Valores del campo `estado`. ⚠️ Asumidos: confirmá los reales en tu BD.
-export const ESTADO_PENDIENTE = 'pendiente';
-export const ESTADO_ATENDIDO = 'atendido';
-
 export type Id = string | number;
+
+// ---- Estados por tabla (valores reales confirmados) ----
+// llamados: flujo binario
+export const LLAMADO_PENDIENTE = 'pendiente';
+export const LLAMADO_ATENDIDO = 'atendido';
+
+// pedidos: flujo de 3 estados
+export const PEDIDO_PENDIENTE = 'pendiente';
+export const PEDIDO_EN_PREPARACION = 'en_preparacion';
+export const PEDIDO_ENTREGADO = 'entregado';
+
+/**
+ * Estados de pedido que el panel considera "activos" (aún no entregados) y por
+ * lo tanto muestra al mesero. Cambiá esto si querés que el panel muestre solo
+ * 'pendiente'.
+ */
+export const PEDIDO_ESTADOS_ACTIVOS = [PEDIDO_PENDIENTE, PEDIDO_EN_PREPARACION];
+
+/** Estado al que pasa un pedido cuando el mesero toca "Atendido". */
+export const PEDIDO_ESTADO_AL_ATENDER = PEDIDO_ENTREGADO;
 
 /** Tabla: meseros */
 export interface Mesero {
@@ -41,7 +51,7 @@ export interface Asignacion {
   mesero_id: Id;
 }
 
-/** Tabla: llamados */
+/** Tabla: llamados (mesero_id se agrega con la migración SQL del README) */
 export interface Llamado {
   id: Id;
   ubicacion: string;
@@ -52,9 +62,10 @@ export interface Llamado {
   telefono_cliente?: string | null;
   created_at: string;
   atendido_at?: string | null;
+  mesero_id?: Id | null;
 }
 
-/** Tabla: pedidos (ojo: NO tiene atendido_at ni mesero_id) */
+/** Tabla: pedidos (atendido_at y mesero_id se agregan con la migración SQL) */
 export interface Pedido {
   id: Id;
   ubicacion: string;
@@ -63,6 +74,8 @@ export interface Pedido {
   telefono_cliente?: string | null;
   total?: number | null;
   created_at: string;
+  atendido_at?: string | null;
+  mesero_id?: Id | null;
 }
 
 /** Item unificado para mostrar llamados y pedidos en la misma lista. */
@@ -78,5 +91,5 @@ export interface FeedItem {
   telefono?: string | null;
   total?: number | null; // solo pedidos
   created_at: string;
-  atendido_at?: string | null; // solo llamados (pedidos no lo tiene)
+  atendido_at?: string | null;
 }

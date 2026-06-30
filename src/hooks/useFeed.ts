@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { ESTADO_ATENDIDO, ESTADO_PENDIENTE, FeedItem, Llamado, Pedido } from '../types/db';
+import {
+  FeedItem,
+  Id,
+  LLAMADO_ATENDIDO,
+  LLAMADO_PENDIENTE,
+  Llamado,
+  PEDIDO_ENTREGADO,
+  PEDIDO_ESTADOS_ACTIVOS,
+  PEDIDO_ESTADO_AL_ATENDER,
+  Pedido,
+} from '../types/db';
 
 /** Une nombre + apellido del cliente en un solo string (lo que haya). */
 function nombreCompleto(nombre?: string | null, apellido?: string | null): string | null {
@@ -32,7 +42,7 @@ function pedidoToItem(r: Pedido): FeedItem {
     telefono: r.telefono_cliente ?? null,
     total: r.total ?? null,
     created_at: r.created_at,
-    atendido_at: null, // la tabla pedidos no tiene atendido_at
+    atendido_at: r.atendido_at ?? null,
   };
 }
 
@@ -52,10 +62,12 @@ interface UseFeedResult {
 }
 
 /**
- * Llamados y pedidos PENDIENTES de las zonas del mesero, en tiempo real.
+ * Llamados y pedidos ACTIVOS de las zonas del mesero, en tiempo real.
+ *  - llamados: estado = 'pendiente'
+ *  - pedidos: estado IN ('pendiente', 'en_preparacion')  (aún no entregados)
  * Filtra por `ubicacion IN (nombres de zonas asignadas)`.
  */
-export function useFeed(zonas: string[], _meseroId: unknown): UseFeedResult {
+export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +75,7 @@ export function useFeed(zonas: string[], _meseroId: unknown): UseFeedResult {
   const zonasRef = useRef(zonas);
   zonasRef.current = zonas;
 
-  const fetchPendientes = useCallback(async () => {
+  const fetchActivos = useCallback(async () => {
     const z = zonasRef.current;
     if (!z.length) {
       setItems([]);
@@ -76,14 +88,14 @@ export function useFeed(zonas: string[], _meseroId: unknown): UseFeedResult {
       supabase
         .from('llamados')
         .select('*')
-        .eq('estado', ESTADO_PENDIENTE)
+        .eq('estado', LLAMADO_PENDIENTE)
         .in('ubicacion', z)
         .order('created_at', { ascending: true })
         .returns<Llamado[]>(),
       supabase
         .from('pedidos')
         .select('*')
-        .eq('estado', ESTADO_PENDIENTE)
+        .in('estado', PEDIDO_ESTADOS_ACTIVOS)
         .in('ubicacion', z)
         .order('created_at', { ascending: true })
         .returns<Pedido[]>(),
@@ -106,53 +118,60 @@ export function useFeed(zonas: string[], _meseroId: unknown): UseFeedResult {
 
   // Carga inicial + suscripción realtime a ambas tablas.
   useEffect(() => {
-    fetchPendientes();
+    fetchActivos();
 
     const channel = supabase
       .channel('feed-mesero')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'llamados' }, () => {
-        fetchPendientes();
+        fetchActivos();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
-        fetchPendientes();
+        fetchActivos();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchPendientes]);
+  }, [fetchActivos]);
 
-  /** Marca un llamado/pedido como atendido. */
+  /**
+   * Marca un item como atendido por el mesero actual.
+   *  - llamado → estado 'atendido'
+   *  - pedido  → estado 'entregado'
+   * En ambos casos setea atendido_at y mesero_id (requiere la migración SQL).
+   */
   const markAtendido = useCallback(
     async (item: FeedItem) => {
       // Optimista: lo sacamos de la lista enseguida.
       setItems((prev) => prev.filter((i) => !(i.kind === item.kind && i.id === item.id)));
 
-      // El payload difiere por tabla: pedidos no tiene atendido_at.
       const table = item.kind === 'llamado' ? 'llamados' : 'pedidos';
-      const payload =
-        item.kind === 'llamado'
-          ? { estado: ESTADO_ATENDIDO, atendido_at: new Date().toISOString() }
-          : { estado: ESTADO_ATENDIDO };
+      const nuevoEstado = item.kind === 'llamado' ? LLAMADO_ATENDIDO : PEDIDO_ESTADO_AL_ATENDER;
+      const payload = {
+        estado: nuevoEstado,
+        atendido_at: new Date().toISOString(),
+        mesero_id: meseroId,
+      };
 
       const { error: updErr } = await supabase.from(table).update(payload).eq('id', item.id);
 
       if (updErr) {
         setError('No se pudo marcar como atendido. Reintentá.');
-        await fetchPendientes();
+        await fetchActivos();
       }
     },
-    [fetchPendientes],
+    [meseroId, fetchActivos],
   );
 
-  return { items, loading, error, refetch: fetchPendientes, markAtendido };
+  return { items, loading, error, refetch: fetchActivos, markAtendido };
 }
 
 /**
  * Atendidos hoy, de las zonas del mesero (para el historial).
- *  - llamados: filtra por atendido_at >= hoy.
- *  - pedidos: no tienen atendido_at, así que se filtran por created_at >= hoy.
+ *  - llamados: estado 'atendido', atendido_at >= hoy
+ *  - pedidos:  estado 'entregado', atendido_at >= hoy
+ * (Requiere la columna atendido_at en pedidos — ver migración SQL del README.)
  */
 export function useHistorial(zonas: string[]) {
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -171,7 +190,7 @@ export function useHistorial(zonas: string[]) {
       supabase
         .from('llamados')
         .select('*')
-        .eq('estado', ESTADO_ATENDIDO)
+        .eq('estado', LLAMADO_ATENDIDO)
         .in('ubicacion', zonas)
         .gte('atendido_at', desde)
         .order('atendido_at', { ascending: false })
@@ -179,10 +198,10 @@ export function useHistorial(zonas: string[]) {
       supabase
         .from('pedidos')
         .select('*')
-        .eq('estado', ESTADO_ATENDIDO)
+        .eq('estado', PEDIDO_ENTREGADO)
         .in('ubicacion', zonas)
-        .gte('created_at', desde)
-        .order('created_at', { ascending: false })
+        .gte('atendido_at', desde)
+        .order('atendido_at', { ascending: false })
         .returns<Pedido[]>(),
     ]);
 
