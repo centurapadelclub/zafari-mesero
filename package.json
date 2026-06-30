@@ -28,7 +28,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:db": "node --env-file=.env scripts/check-db.mjs"
   },
   "private": true
 }

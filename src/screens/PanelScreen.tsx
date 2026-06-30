@@ -3,7 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useFeed } from '../hooks/useFeed';
 import { FeedCard } from '../components/FeedCard';
-import { FeedItem } from '../types/db';
+import { FeedItem, Id } from '../types/db';
 import {
   requestNotificationPermissions,
   startInsistentVibration,
@@ -14,7 +14,7 @@ export function PanelScreen() {
   const { session } = useAuth();
   const zonas = session?.zonas ?? [];
   const { items, loading, error, refetch, markAtendido } = useFeed(zonas, session?.id ?? '');
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<Id | null>(null);
 
   // Asegurar permisos y canal de notificaciones al entrar al panel.
   useEffect(() => {

@@ -17,28 +17,39 @@ function horaCorta(iso?: string | null): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function formatTotal(total?: number | null): string | null {
+  if (total == null) return null;
+  return `$${Number(total).toLocaleString('es-AR')}`;
+}
+
 export function FeedCard({ item, onAtendido, busy, modo = 'pendiente' }: Props) {
   const esLlamado = item.kind === 'llamado';
+  const total = formatTotal(item.total);
 
   return (
     <View style={[styles.card, esLlamado ? styles.cardLlamado : styles.cardPedido]}>
       <View style={styles.header}>
         <View style={styles.badgeRow}>
           <View style={[styles.badge, esLlamado ? styles.badgeLlamado : styles.badgePedido]}>
-            <Text style={styles.badgeText}>{esLlamado ? 'LLAMADO' : 'PEDIDO'}</Text>
+            <Text style={styles.badgeText}>
+              {esLlamado ? 'LLAMADO' : 'PEDIDO'}
+              {esLlamado && item.tipo ? ` · ${item.tipo}` : ''}
+            </Text>
           </View>
-          <Text style={styles.zona}>{item.zona}</Text>
         </View>
 
         {modo === 'pendiente' ? (
           <Cronometro desde={item.created_at} />
         ) : (
-          <Text style={styles.horaAtendido}>✓ {horaCorta(item.atendido_at)}</Text>
+          <Text style={styles.horaAtendido}>✓ {horaCorta(item.atendido_at ?? item.created_at)}</Text>
         )}
       </View>
 
-      <Text style={styles.mesa}>Mesa {String(item.mesa)}</Text>
-      {item.descripcion ? <Text style={styles.descripcion}>{item.descripcion}</Text> : null}
+      <Text style={styles.ubicacion}>{item.ubicacion}</Text>
+
+      {item.cliente ? <Text style={styles.cliente}>👤 {item.cliente}</Text> : null}
+      {item.telefono ? <Text style={styles.metaLine}>📞 {item.telefono}</Text> : null}
+      {total ? <Text style={styles.total}>Total: {total}</Text> : null}
 
       {modo === 'pendiente' && onAtendido ? (
         <Pressable
@@ -79,15 +90,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   badge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   badgeLlamado: { backgroundColor: '#FDECEA' },
   badgePedido: { backgroundColor: '#E3F2FD' },
   badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, color: '#333' },
-  zona: { fontSize: 13, color: '#666', fontWeight: '600' },
   horaAtendido: { fontSize: 15, fontWeight: '700', color: '#2E7D32' },
-  mesa: { fontSize: 26, fontWeight: '800', color: '#1a1a1a' },
-  descripcion: { fontSize: 15, color: '#444', marginTop: 4 },
+  ubicacion: { fontSize: 24, fontWeight: '800', color: '#1a1a1a' },
+  cliente: { fontSize: 15, color: '#333', marginTop: 4 },
+  metaLine: { fontSize: 14, color: '#666', marginTop: 2 },
+  total: { fontSize: 16, fontWeight: '700', color: '#1565C0', marginTop: 4 },
   boton: {
     marginTop: 14,
     backgroundColor: '#2E7D32',

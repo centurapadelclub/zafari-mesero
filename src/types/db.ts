@@ -1,73 +1,82 @@
 /**
- * Tipos de las tablas de Supabase usadas por la app del mesero.
+ * Tipos de las tablas de Supabase (esquema REAL del proyecto).
  *
- * ⚠️ SUPOSICIONES DE ESQUEMA
- * Estos tipos reflejan una estructura razonable inferida del enunciado, pero NO
- * conozco el esquema real de tu base. Ajusta los nombres de columna aquí (y en
- * src/hooks/useFeed.ts / AuthContext) para que coincidan con tus tablas reales.
- * Todo el acceso a datos pasa por un punto central, así que cambiar un nombre
- * de columna se hace en un solo lugar.
+ * Relación mesero → zonas → llamados/pedidos:
+ *   meseros 1—* asignaciones *—1 zonas        (asignaciones.zona_id -> zonas.id)
+ *   zonas.nombre  ==  llamados.ubicacion / pedidos.ubicacion   ⚠️ (ver abajo)
  *
- * Convención asumida:
- *  - Estado pendiente:  estado = 'pendiente'
- *  - Estado atendido:   estado = 'atendido'
- *  - Zona del llamado/pedido en la columna `zona` (texto), que debe coincidir
- *    con alguna de las zonas asignadas al mesero en la tabla `asignaciones`.
+ * ⚠️ SUPOSICIÓN IMPORTANTE (no pude verificarla en vivo, ver README):
+ *   Los `llamados` y `pedidos` NO tienen columna de zona; solo `ubicacion`.
+ *   Asumo que `ubicacion` contiene el NOMBRE de la zona (zonas.nombre), así que
+ *   el feed del mesero filtra por `ubicacion IN (nombres de sus zonas)`.
+ *   Si `ubicacion` es más granular (ej. "Mesa 5") y la zona se deriva de otra
+ *   forma, decime un par de valores reales y lo ajusto.
  */
 
-export type EstadoItem = 'pendiente' | 'atendido' | string;
+// Valores del campo `estado`. ⚠️ Asumidos: confirmá los reales en tu BD.
+export const ESTADO_PENDIENTE = 'pendiente';
+export const ESTADO_ATENDIDO = 'atendido';
+
+export type Id = string | number;
 
 /** Tabla: meseros */
 export interface Mesero {
-  id: string;
+  id: Id;
   nombre: string;
-  pin: string; // PIN de 4 dígitos (idealmente hasheado en BD; ver nota de seguridad en README)
+  pin: string;
+  rol?: string | null;
   activo?: boolean | null;
 }
 
-/** Tabla: asignaciones (relaciona un mesero con las zonas que atiende) */
+/** Tabla: zonas */
+export interface Zona {
+  id: Id;
+  nombre: string;
+}
+
+/** Tabla: asignaciones (mesero ↔ zona) */
 export interface Asignacion {
-  id: string;
-  mesero_id: string;
-  zona: string;
+  id: Id;
+  zona_id: Id;
+  mesero_id: Id;
 }
 
-/** Tabla: llamados (un cliente llama al mesero desde una mesa) */
+/** Tabla: llamados */
 export interface Llamado {
-  id: string;
-  mesa: string | number;
-  zona: string;
-  estado: EstadoItem;
-  created_at: string; // timestamp ISO
-  atendido_at?: string | null;
-  mesero_id?: string | null;
-}
-
-/** Tabla: pedidos */
-export interface Pedido {
-  id: string;
-  mesa: string | number;
-  zona: string;
-  estado: EstadoItem;
-  descripcion?: string | null;
+  id: Id;
+  ubicacion: string;
+  tipo?: string | null;
+  estado: string;
+  nombre_cliente?: string | null;
+  apellido_cliente?: string | null;
+  telefono_cliente?: string | null;
   created_at: string;
   atendido_at?: string | null;
-  mesero_id?: string | null;
 }
 
-/**
- * Item unificado para mostrar llamados y pedidos en la misma lista del panel.
- * `kind` permite distinguir de qué tabla viene cada fila.
- */
+/** Tabla: pedidos (ojo: NO tiene atendido_at ni mesero_id) */
+export interface Pedido {
+  id: Id;
+  ubicacion: string;
+  estado: string;
+  nombre_cliente?: string | null;
+  telefono_cliente?: string | null;
+  total?: number | null;
+  created_at: string;
+}
+
+/** Item unificado para mostrar llamados y pedidos en la misma lista. */
 export type FeedKind = 'llamado' | 'pedido';
 
 export interface FeedItem {
   kind: FeedKind;
-  id: string;
-  mesa: string | number;
-  zona: string;
-  estado: EstadoItem;
-  descripcion?: string | null;
+  id: Id;
+  ubicacion: string;
+  estado: string;
+  tipo?: string | null; // solo llamados
+  cliente?: string | null; // nombre + apellido (lo que haya)
+  telefono?: string | null;
+  total?: number | null; // solo pedidos
   created_at: string;
-  atendido_at?: string | null;
+  atendido_at?: string | null; // solo llamados (pedidos no lo tiene)
 }

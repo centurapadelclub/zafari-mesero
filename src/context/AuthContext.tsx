@@ -1,18 +1,20 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { Asignacion, Mesero } from '../types/db';
+import { Asignacion, Id, Mesero, Zona } from '../types/db';
 
 /** Datos de la sesión del mesero que persistimos localmente. */
 export interface MeseroSession {
-  id: string;
+  id: Id;
   nombre: string;
-  zonas: string[]; // zonas asignadas (de la tabla `asignaciones`)
+  rol?: string | null;
+  zonaIds: Id[]; // ids de zonas asignadas (asignaciones.zona_id)
+  zonas: string[]; // nombres de esas zonas (zonas.nombre) — se usan para filtrar el feed
 }
 
 interface AuthState {
   session: MeseroSession | null;
-  loading: boolean; // cargando sesión persistida al arrancar
+  loading: boolean;
   signIn: (nombre: string, pin: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
 }
@@ -25,14 +27,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<MeseroSession | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restaurar sesión guardada al arrancar.
   useEffect(() => {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
         if (raw) setSession(JSON.parse(raw) as MeseroSession);
       } catch {
-        // ignorar: arrancamos sin sesión
+        // arrancamos sin sesión
       } finally {
         setLoading(false);
       }
@@ -44,13 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!nombreLimpio) return { ok: false, error: 'Ingresá tu nombre.' };
     if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'El PIN debe tener 4 dígitos.' };
 
-    // 1) Validar credenciales contra la tabla `meseros`.
-    //    NOTA: comparar el PIN en texto plano asume que así está en la BD. Si lo
-    //    guardás hasheado, esta validación debería hacerse en una Edge Function
-    //    (ver nota de seguridad en el README).
+    // 1) Validar contra `meseros` (nombre + pin).
     const { data: meseros, error } = await supabase
       .from('meseros')
-      .select('id, nombre, pin, activo')
+      .select('id, nombre, pin, rol, activo')
       .ilike('nombre', nombreLimpio)
       .eq('pin', pin)
       .limit(1)
@@ -60,23 +58,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { ok: false, error: 'No se pudo conectar con el servidor.' };
     }
     const mesero = meseros?.[0];
-    if (!mesero) {
-      return { ok: false, error: 'Nombre o PIN incorrecto.' };
-    }
+    if (!mesero) return { ok: false, error: 'Nombre o PIN incorrecto.' };
     if (mesero.activo === false) {
       return { ok: false, error: 'Tu usuario está inactivo. Hablá con el encargado.' };
     }
 
-    // 2) Cargar las zonas asignadas al mesero.
+    // 2) Zonas asignadas: asignaciones.zona_id  →  zonas.nombre
     const { data: asignaciones } = await supabase
       .from('asignaciones')
-      .select('id, mesero_id, zona')
+      .select('id, zona_id, mesero_id')
       .eq('mesero_id', mesero.id)
       .returns<Asignacion[]>();
 
-    const zonas = Array.from(new Set((asignaciones ?? []).map((a) => a.zona).filter(Boolean)));
+    const zonaIds = Array.from(
+      new Set((asignaciones ?? []).map((a) => a.zona_id).filter((v) => v != null)),
+    );
 
-    const newSession: MeseroSession = { id: mesero.id, nombre: mesero.nombre, zonas };
+    let zonas: string[] = [];
+    if (zonaIds.length) {
+      const { data: zonasRows } = await supabase
+        .from('zonas')
+        .select('id, nombre')
+        .in('id', zonaIds)
+        .returns<Zona[]>();
+      zonas = (zonasRows ?? []).map((z) => z.nombre).filter(Boolean);
+    }
+
+    const newSession: MeseroSession = {
+      id: mesero.id,
+      nombre: mesero.nombre,
+      rol: mesero.rol ?? null,
+      zonaIds,
+      zonas,
+    };
     setSession(newSession);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
     return { ok: true };

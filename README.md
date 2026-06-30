@@ -94,22 +94,57 @@ y Expo Go, pero el push y la vibración insistente requieren el dev build.)
 
 ---
 
-## ⚠️ Suposiciones de esquema (revisá esto)
+## Esquema de la base (real) y suposiciones pendientes
 
-No conozco los nombres reales de tus columnas. Asumí esta estructura — si difiere,
-ajustá `src/types/db.ts` y los `select(...)` de `src/hooks/useFeed.ts` y
-`src/context/AuthContext.tsx` (todo el acceso a datos está centralizado ahí):
+El código está alineado a este esquema (el que pasaste). Todo el acceso a datos
+está centralizado en `src/types/db.ts`, `src/hooks/useFeed.ts` y
+`src/context/AuthContext.tsx`.
 
-| Tabla         | Columnas asumidas                                                                 |
-|---------------|-----------------------------------------------------------------------------------|
-| `meseros`     | `id`, `nombre`, `pin`, `activo`                                                    |
-| `asignaciones`| `id`, `mesero_id`, `zona` (texto)                                                  |
-| `llamados`    | `id`, `mesa`, `zona`, `estado` (`pendiente`/`atendido`), `created_at`, `atendido_at`, `mesero_id` |
-| `pedidos`     | `id`, `mesa`, `zona`, `estado`, `descripcion`, `created_at`, `atendido_at`, `mesero_id` |
+| Tabla          | Columnas                                                                                          |
+|----------------|---------------------------------------------------------------------------------------------------|
+| `meseros`      | `id`, `nombre`, `pin`, `rol`, `activo`                                                             |
+| `zonas`        | `id`, `nombre`                                                                                     |
+| `asignaciones` | `id`, `zona_id`, `mesero_id`                                                                       |
+| `llamados`     | `id`, `ubicacion`, `tipo`, `estado`, `nombre_cliente`, `apellido_cliente`, `telefono_cliente`, `created_at`, `atendido_at` |
+| `pedidos`      | `id`, `ubicacion`, `estado`, `nombre_cliente`, `telefono_cliente`, `total`, `created_at`           |
 
-La relación mesero↔zona se hace por el texto de `zona` (debe coincidir entre
-`asignaciones` y `llamados`/`pedidos`). Si en realidad usás `zona_id` numérico,
-avisame y lo cambio.
+**Cómo filtra el feed por zona:** `meseros → asignaciones.zona_id → zonas.nombre`,
+y luego `llamados/pedidos WHERE ubicacion IN (nombres de zonas del mesero)`.
+
+### 🔴 2 suposiciones que NO pude verificar (egress bloqueado, ver abajo)
+
+1. **`ubicacion` == `zonas.nombre`.** Como `llamados`/`pedidos` no tienen columna
+   de zona, asumo que `ubicacion` guarda el nombre de la zona. Si `ubicacion` es
+   más granular (ej. "Mesa 5") el filtro por zona no va a matchear — decime un par
+   de valores reales de `ubicacion` y de `zonas.nombre` y lo ajusto.
+2. **Valores de `estado`** = `'pendiente'` / `'atendido'` (constantes
+   `ESTADO_PENDIENTE`/`ESTADO_ATENDIDO` en `src/types/db.ts`). Si usás otros
+   (`pending`/`done`, etc.), cambialos ahí.
+
+### Limitaciones del esquema que ya manejé en el código
+
+- `pedidos` **no tiene `atendido_at`**: al marcar atendido solo se actualiza
+  `estado`; el historial de pedidos se filtra por `created_at` del día. Si querés
+  hora exacta de atención, conviene agregar `atendido_at` (timestamptz) a `pedidos`.
+- Ni `llamados` ni `pedidos` tienen `mesero_id`: no se registra QUÉ mesero atendió.
+  Si lo necesitás, agregá esa columna y lo seteo en el "Atendido".
+
+### ✅ Verificación en 1 comando (corré esto en tu red)
+
+No pude probar contra tu base porque **el entorno donde trabajo bloquea el host de
+Supabase** por política de egress (`uongnbktkghwkkwllcxa.supabase.co` → 403). Para
+validar login + Realtime + las 2 suposiciones de arriba, en tu compu:
+
+```bash
+npm run check:db    # = node --env-file=.env scripts/check-db.mjs
+```
+
+Te dice: cuántas zonas/meseros lee (valida RLS de SELECT), los valores reales de
+`estado` y `tipo`, y **si las `ubicacion` coinciden con `zonas.nombre`**, además de
+probar que Realtime conecte. No modifica datos. Pegame la salida y ajusto lo que haga falta.
+
+> Alternativa: si agregás `uongnbktkghwkkwllcxa.supabase.co` a la allowlist de
+> egress de este entorno, corro la verificación yo mismo desde acá.
 
 ## 🔔 Notas sobre las notificaciones Android (importante)
 
