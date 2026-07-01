@@ -61,9 +61,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   extra: {
     eas: {
-      // Se completa automáticamente al correr `eas init`. Necesario solo si
-      // decides usar el servicio de push de Expo en vez de FCM directo.
-      projectId: process.env.EAS_PROJECT_ID ?? undefined,
+      // projectId de EAS (se puede sobreescribir con la env EAS_PROJECT_ID).
+      projectId: process.env.EAS_PROJECT_ID ?? '1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
     },
   },
 });
