@@ -59,6 +59,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableBackgroundRemoteNotifications: true,
       },
     ],
+    // Firebase Cloud Messaging nativo (token + background handler, Esc2).
+    '@react-native-firebase/app',
+    // RNFirebase en iOS requiere frameworks estáticos.
+    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
     // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',

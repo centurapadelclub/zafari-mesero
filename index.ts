@@ -1,20 +1,26 @@
 import { registerRootComponent } from 'expo';
 import notifee, { EventType } from '@notifee/react-native';
+import messaging from '@react-native-firebase/messaging';
 
-// Define la tarea de background para el push (Esc2) al cargar el módulo.
-import './src/lib/backgroundTask';
-import { parseCallData } from './src/lib/incomingCall';
+import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
-import { callToRoute } from './src/lib/incomingCall';
 
 import App from './App';
 
 /**
- * Handler de eventos de notifee en segundo plano (app en background/cerrada).
- * Debe registrarse en el nivel superior (fuera de cualquier componente).
- * Si el usuario toca la notificación de llamada, al abrir la app el ruteo
- * definitivo lo hace getInitialNotification (ver RootNavigator); acá cubrimos
- * el caso en que el navigator ya esté listo.
+ * Esc2 (app en segundo plano o CERRADA): handler de background de RNFirebase.
+ * Cuando llega el push data-only, arma la llamada entrante a pantalla completa
+ * (notifee Full Screen Intent). Es el camino robusto para celulares que matan
+ * procesos (Xiaomi/Huawei/Samsung viejos). DEBE registrarse en el nivel superior.
+ */
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
+  if (call) await displayIncomingCall(call);
+});
+
+/**
+ * Handler de eventos de notifee en segundo plano: si el usuario toca la
+ * notificación de llamada, al abrir la app se rutea a la pantalla.
  */
 notifee.onBackgroundEvent(async ({ type, detail }) => {
   if (type === EventType.PRESS) {

@@ -196,8 +196,21 @@ nada. ✅
   `SYSTEM_ALERT_WINDOW` en `app.config.ts`.
 - Botón deslizable: **derecha = Atender** (actualiza estado/`atendido_at`/`mesero_id`
   en Supabase igual que el botón normal), **izquierda = Ignorar** (descarta sin tocar la BD).
-- Vibración tipo teléfono por máx 10 s; sonido según la preferencia (canal
-  `llamado-call-sound` vs `llamado-call-silent`).
+- Vibración tipo teléfono por máx 10 s.
+- **Ringtone en loop** mientras la pantalla está visible (`expo-audio`,
+  `assets/ringtone.wav`), que se corta al Atender/Ignorar o al cerrarse la
+  pantalla. Respeta la preferencia: con 'Solo vibración' NO suena (pero vibra).
+
+**Entrega FCM con RNFirebase** (`@react-native-firebase/messaging`): toda la
+mensajería FCM está consolidada en RNFirebase para que el **Esc2 funcione con la
+app cerrada** en celulares que matan procesos (Xiaomi/Huawei/Samsung viejos):
+- `messaging().getToken()` → token (en `savePushToken`).
+- `messaging().setBackgroundMessageHandler` (en `index.ts`, nivel superior) →
+  `displayIncomingCall()` cuando la app está en background/cerrada.
+- `messaging().onMessage` (en `App.tsx`) → `displayHeadsUp()` con la app abierta (Esc3).
+- Se eliminó el background task de expo-notifications para evitar doble disparo y
+  conflicto de `FirebaseMessagingService`. expo-notifications queda solo para
+  canales/permisos.
 
 **Esc3 — heads-up** (canal `llamados`, importancia HIGH, `sound: null`): vibración
 corta una vez, sin sonido, auto-dismiss ~5 s (lo maneja el SO). El mesero ve el
@@ -211,19 +224,20 @@ al Esc2**; el Esc3 siempre es sin sonido.
 Android **"Mostrar sobre otras apps"** (`SYSTEM_ALERT_WINDOW`) vía
 `expo-intent-launcher`. Necesario para el Esc2.
 
-### ⚠️ Lo que hay que verificar/afinar en el dev build
+### ⚠️ Lo que hay que verificar en el dev build
 
-- El disparo del **Esc2 con la app cerrada** depende de que el push data-only
-  llegue a la tarea de background (`src/lib/backgroundTask.ts`). Si en tu build no
-  se dispara de forma confiable (varía por OEM: Xiaomi/Huawei/etc. matan procesos),
-  la alternativa robusta es **`@react-native-firebase/messaging`** con
-  `setBackgroundMessageHandler` llamando a `displayIncomingCall()`. El resto del
-  código (UI, canales, ruteo) queda igual.
-- El sonido del Esc2 lo da el **canal** (suena una vez al llegar). Si querés un
-  *ringtone que suene en loop* mientras aparece la llamada, hay que reproducirlo
-  en JS (p. ej. `expo-audio`) con un asset de sonido — decime y lo agrego.
+- **No pude compilar/probar Android** desde este entorno: el código typechea y
+  `expo config --introspect` resuelve OK, pero el comportamiento real (FSI sobre
+  el bloqueo, entrega con app cerrada, ringtone) se valida en el dev build.
+- **RNFirebase + expo-notifications conviven**: RNFirebase es dueño de la
+  mensajería FCM; expo-notifications se usa solo para canales/permisos. Si en el
+  build aparece un conflicto del `FirebaseMessagingService`, la solución es dejar
+  de usar expo-notifications para push (mover la creación de canales a notifee, que
+  ya está integrado). Verificarlo al primer build.
 - `SYSTEM_ALERT_WINDOW` requiere que el mesero lo **active a mano** la primera vez
   (por eso el onboarding).
+- El ringtone es un WAV sintetizado (`assets/ringtone.wav`). Si querés otro sonido,
+  reemplazá ese archivo.
 
 ## 🧾 Historial: quién atendió y a qué hora
 

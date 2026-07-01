@@ -5,7 +5,7 @@ import notifee, {
   EventType,
 } from '@notifee/react-native';
 import { RootStackParamList } from '../types/db';
-import { callChannelForPref, ensureChannels } from './notifications';
+import { CHANNEL_HEADSUP, callChannelForPref, ensureChannels } from './notifications';
 
 /**
  * Escenario 2 — construcción y ruteo de la "llamada entrante" (Full Screen Intent).
@@ -57,6 +57,27 @@ export async function displayIncomingCall(call: CallData): Promise<void> {
       ongoing: true,
       autoCancel: false,
       timeoutAfter: 30000, // se descarta sola a los 30 s si nadie atiende
+    },
+  });
+}
+
+/**
+ * Esc3: muestra un heads-up (banner) cuando el push llega con la app en uso.
+ * Vibración corta (la del canal), sin sonido, auto-dismiss ~5 s.
+ */
+export async function displayHeadsUp(call: CallData): Promise<void> {
+  await ensureChannels();
+  await notifee.displayNotification({
+    title:
+      call.kind === 'pedido' ? `Nuevo pedido — ${call.ubicacion}` : `Llamado — ${call.ubicacion}`,
+    body: call.tipo ? `Tipo: ${call.tipo}` : 'Tocá para ver',
+    data: { kind: call.kind, id: call.id, ubicacion: call.ubicacion, tipo: call.tipo ?? '' },
+    android: {
+      channelId: CHANNEL_HEADSUP,
+      importance: AndroidImportance.HIGH,
+      pressAction: { id: 'incoming-call' },
+      timeoutAfter: 5000, // el banner se descarta solo a los ~5 s
+      autoCancel: true,
     },
   });
 }

@@ -2,11 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import notifee from '@notifee/react-native';
+import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SlideToAct } from '../components/SlideToAct';
 import { startCallVibration, stopCallVibration } from '../lib/notifications';
+import { getSoundPref } from '../lib/preferences';
 import { LLAMADO_ATENDIDO, PEDIDO_ESTADO_AL_ATENDER, RootStackParamList } from '../types/db';
+
+const RINGTONE = require('../../assets/ringtone.wav');
 
 type IncomingRoute = RouteProp<RootStackParamList, 'IncomingCall'>;
 
@@ -22,14 +26,49 @@ export function IncomingCallScreen() {
   const { kind, id, ubicacion, tipo } = params;
   const [busy, setBusy] = useState(false);
 
-  // Vibración tipo llamada al aparecer; se corta sola a los 10 s o al actuar.
+  // Ringtone en loop mientras la pantalla esté visible (solo si la preferencia
+  // es 'sonido + vibración'). La vibración va siempre.
+  const player = useAudioPlayer(RINGTONE);
+
   useEffect(() => {
+    let cancelled = false;
     startCallVibration();
-    return () => stopCallVibration();
+    (async () => {
+      try {
+        const pref = await getSoundPref();
+        if (cancelled || pref !== 'sound_vibration') return;
+        // Sonar aunque el celular esté en silencio.
+        await setAudioModeAsync({ playsInSilentMode: true });
+        player.loop = true;
+        player.play();
+      } catch {
+        // sin audio: la vibración sigue funcionando
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      stopCallVibration();
+      try {
+        player.pause();
+      } catch {
+        // el player puede haberse liberado al desmontar
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const stopRingtone = () => {
+    try {
+      player.pause();
+    } catch {
+      // ignorar
+    }
+  };
 
   const cerrar = () => {
     stopCallVibration();
+    stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Tabs' as never);
@@ -39,6 +78,7 @@ export function IncomingCallScreen() {
     if (busy) return;
     setBusy(true);
     stopCallVibration();
+    stopRingtone();
     const table = kind === 'llamado' ? 'llamados' : 'pedidos';
     const nuevoEstado = kind === 'llamado' ? LLAMADO_ATENDIDO : PEDIDO_ESTADO_AL_ATENDER;
     await supabase

@@ -2,6 +2,7 @@ import { Platform, Vibration } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import notifee, { AndroidImportance, AndroidVisibility } from '@notifee/react-native';
+import messaging from '@react-native-firebase/messaging';
 import { supabase } from './supabase';
 import { Id } from '../types/db';
 import { getSoundPref } from './preferences';
@@ -100,14 +101,15 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return status === 'granted';
 }
 
-// ---- Token FCM ----
+// ---- Token FCM (vía @react-native-firebase/messaging) ----
+// Consolidamos toda la mensajería FCM en RNFirebase (token + foreground +
+// background) para el manejo confiable con la app cerrada (ver index.ts).
 export async function getFcmDeviceToken(): Promise<string | null> {
   if (!Device.isDevice) return null;
   const granted = await requestNotificationPermissions();
   if (!granted) return null;
   try {
-    const token = await Notifications.getDevicePushTokenAsync();
-    return typeof token.data === 'string' ? token.data : String(token.data);
+    return await messaging().getToken();
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[notifications] No se pudo obtener el token FCM:', err);
