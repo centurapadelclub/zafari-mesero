@@ -36,12 +36,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       monochromeImage: './assets/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
-    // Permisos necesarios para notificaciones insistentes tipo "llamado":
+    // Permisos para las notificaciones tipo "llamado":
     permissions: [
       'android.permission.POST_NOTIFICATIONS', // Android 13+ requiere pedir permiso de notificaciones
-      'android.permission.VIBRATE', // patrón de vibración insistente
+      'android.permission.VIBRATE', // patrones de vibración
       'android.permission.WAKE_LOCK', // despertar la pantalla al llegar el llamado
-      'android.permission.USE_FULL_SCREEN_INTENT', // heads-up a pantalla completa con el celular bloqueado
+      'android.permission.USE_FULL_SCREEN_INTENT', // Esc2: pantalla completa con el celular bloqueado
+      'android.permission.SYSTEM_ALERT_WINDOW', // Esc2: mostrar sobre otras apps
       'android.permission.RECEIVE_BOOT_COMPLETED',
     ],
   },
@@ -58,6 +59,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableBackgroundRemoteNotifications: true,
       },
     ],
+    // Firebase Cloud Messaging nativo (token + background handler, Esc2).
+    '@react-native-firebase/app',
+    // RNFirebase en iOS requiere frameworks estáticos.
+    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
+    // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
+    // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
+    './plugins/withFullScreenIntent',
   ],
   extra: {
     eas: {

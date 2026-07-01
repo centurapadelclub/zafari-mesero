@@ -131,29 +131,22 @@ function buildContent(table: string, record: Record<string, unknown>) {
   };
 }
 
-// ---- Envío FCM v1 (notificación de alta prioridad / canal MAX) ----
+// ---- Envío FCM v1 (mensaje DATA-only de alta prioridad) ----
+// Enviamos data-only (sin bloque `notification`) para que la app controle la
+// presentación: la app decide entre Full Screen Intent (Esc2, celular bloqueado)
+// y heads-up (Esc3, celular en uso). El título/cuerpo van dentro de `data`.
 async function sendFcm(
   accessToken: string,
   projectId: string,
   token: string,
-  content: { title: string; body: string },
   data: Record<string, string>,
 ): Promise<void> {
   const message = {
     message: {
       token,
-      notification: { title: content.title, body: content.body },
       data,
       android: {
-        priority: 'high',
-        notification: {
-          channel_id: 'llamados', // mismo canal MAX creado en la app
-          sound: 'default',
-          notification_priority: 'PRIORITY_MAX',
-          visibility: 'PUBLIC', // visible en pantalla bloqueada
-          default_vibrate_timings: false,
-          vibrate_timings: ['0s', '5s', '5s'],
-        },
+        priority: 'high', // despierta el dispositivo para procesar el push
       },
     },
   };
@@ -226,14 +219,17 @@ Deno.serve(async (req) => {
     const sa = JSON.parse(Deno.env.get('FCM_SERVICE_ACCOUNT')!) as ServiceAccount;
     const accessToken = await getAccessToken(sa);
     const content = buildContent(table, record);
-    const data = {
+    const data: Record<string, string> = {
       kind: table === 'pedidos' ? 'pedido' : 'llamado',
       id: String(record.id ?? ''),
       ubicacion,
+      tipo: record.tipo != null ? String(record.tipo) : '',
+      title: content.title,
+      body: content.body,
     };
 
     await Promise.all(
-      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, content, data)),
+      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data)),
     );
 
     return new Response(JSON.stringify({ sent: tokens.length, ubicacion }), {

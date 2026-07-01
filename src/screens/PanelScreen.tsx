@@ -4,11 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFeed } from '../hooks/useFeed';
 import { FeedCard } from '../components/FeedCard';
 import { FeedItem, Id } from '../types/db';
-import {
-  requestNotificationPermissions,
-  startInsistentVibration,
-  stopInsistentVibration,
-} from '../lib/notifications';
+import { requestNotificationPermissions } from '../lib/notifications';
 
 export function PanelScreen() {
   const { session } = useAuth();
@@ -16,25 +12,12 @@ export function PanelScreen() {
   const { items, loading, error, refetch, markAtendido } = useFeed(zonas, session?.id ?? '');
   const [busyId, setBusyId] = useState<Id | null>(null);
 
-  // Asegurar permisos y canal de notificaciones al entrar al panel.
+  // Asegurar permisos y canales de notificación al entrar al panel.
+  // La vibración/alerta ya no se maneja acá: la definen los escenarios de
+  // notificación (Esc2 llamada entrante / Esc3 heads-up).
   useEffect(() => {
     requestNotificationPermissions();
   }, []);
-
-  // Vibración insistente mientras haya items en 'pendiente' (un pedido ya
-  // 'en_preparacion' se ve en la lista pero NO mantiene la vibración).
-  const pendientesCount = items.filter((i) => i.estado === 'pendiente').length;
-  useEffect(() => {
-    if (pendientesCount > 0) {
-      startInsistentVibration();
-    } else {
-      stopInsistentVibration();
-    }
-    return () => {
-      // Al desmontar (logout / cambio de pantalla) cortamos la vibración.
-      stopInsistentVibration();
-    };
-  }, [pendientesCount]);
 
   const onAtendido = async (item: FeedItem) => {
     setBusyId(item.id);
