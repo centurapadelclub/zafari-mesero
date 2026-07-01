@@ -34,10 +34,11 @@ yarn-error.*
 .env*.local
 .env
 
-# Firebase / push credentials (NO commitear)
-google-services.json
+# Firebase (iOS): mantener fuera del repo si se agrega en el futuro.
+# NOTA: google-services.json (Android) SÍ se commitea y NO debe ignorarse:
+# EAS excluye del build los archivos gitignoreados aunque estén committeados,
+# y @react-native-firebase/app lo necesita en el build (android.googleServicesFile).
 GoogleService-Info.plist
-google-services.plist
 
 # typescript
 *.tsbuildinfo

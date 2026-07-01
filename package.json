@@ -11,7 +11,7 @@
     "@react-navigation/native": "^7.3.4",
     "@react-navigation/native-stack": "^7.17.6",
     "@supabase/supabase-js": "^2.110.0",
-    "expo": "~57.0.0",
+    "expo": "~57.0.1",
     "expo-audio": "~57.0.0",
     "expo-build-properties": "~57.0.2",
     "expo-constants": "~57.0.2",
@@ -39,5 +39,14 @@
     "typecheck": "tsc --noEmit",
     "check:db": "node --env-file=.env scripts/check-db.mjs"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "//": "notifee es necesario para el Full Screen Intent (Esc2). RN Directory lo marca 'unmaintained' (flag desactualizado); lo excluimos para que expo-doctor no falle el build.",
+        "exclude": ["@notifee/react-native"],
+        "listUnknownPackages": false
+      }
+    }
+  }
 }
