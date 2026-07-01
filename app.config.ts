@@ -17,6 +17,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'zafari-mesero',
   scheme: 'zafarimesero',
   version: '1.0.0',
+  // EAS Update (expo-updates): entrega de actualizaciones OTA.
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
+  updates: {
+    url: 'https://u.expo.dev/1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
+  },
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'light',
