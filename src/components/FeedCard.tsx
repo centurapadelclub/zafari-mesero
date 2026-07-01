@@ -52,6 +52,12 @@ export function FeedCard({ item, onAtendido, busy, modo = 'pendiente' }: Props) 
       {item.telefono ? <Text style={styles.metaLine}>📞 {item.telefono}</Text> : null}
       {total ? <Text style={styles.total}>Total: {total}</Text> : null}
 
+      {modo === 'historial' ? (
+        <Text style={styles.atendidoPor}>
+          Atendido por {item.atendidoPor ?? '—'} · {horaCorta(item.atendido_at ?? item.created_at)}
+        </Text>
+      ) : null}
+
       {modo === 'pendiente' && onAtendido ? (
         <Pressable
           style={({ pressed }) => [styles.boton, pressed && styles.botonPressed]}
@@ -101,6 +107,15 @@ const styles = StyleSheet.create({
   cliente: { fontSize: 15, color: '#333', marginTop: 4 },
   metaLine: { fontSize: 14, color: '#666', marginTop: 2 },
   total: { fontSize: 16, fontWeight: '700', color: '#1565C0', marginTop: 4 },
+  atendidoPor: {
+    fontSize: 13,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 8,
+  },
   boton: {
     marginTop: 14,
     backgroundColor: '#2E7D32',

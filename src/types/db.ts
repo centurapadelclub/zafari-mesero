@@ -92,4 +92,14 @@ export interface FeedItem {
   total?: number | null; // solo pedidos
   created_at: string;
   atendido_at?: string | null;
+  mesero_id?: Id | null;
+  atendidoPor?: string | null; // nombre del mesero que atendió (historial)
 }
+
+/** Rutas del stack raíz de navegación. */
+export type RootStackParamList = {
+  Onboarding: undefined;
+  Tabs: undefined;
+  Preferences: undefined;
+  IncomingCall: { kind: FeedKind; id: Id; ubicacion: string; tipo?: string | null };
+};

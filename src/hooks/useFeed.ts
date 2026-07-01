@@ -29,6 +29,7 @@ function llamadoToItem(r: Llamado): FeedItem {
     telefono: r.telefono_cliente ?? null,
     created_at: r.created_at,
     atendido_at: r.atendido_at ?? null,
+    mesero_id: r.mesero_id ?? null,
   };
 }
 
@@ -43,6 +44,7 @@ function pedidoToItem(r: Pedido): FeedItem {
     total: r.total ?? null,
     created_at: r.created_at,
     atendido_at: r.atendido_at ?? null,
+    mesero_id: r.mesero_id ?? null,
   };
 }
 
@@ -212,7 +214,28 @@ export function useHistorial(zonas: string[]) {
       (b.atendido_at ?? b.created_at).localeCompare(a.atendido_at ?? a.created_at),
     );
 
-    setItems(merged);
+    // Resolver el nombre del mesero que atendió cada item (mesero_id -> nombre).
+    const meseroIds = Array.from(
+      new Set(merged.map((i) => i.mesero_id).filter((v) => v != null)),
+    ) as (string | number)[];
+
+    let nombrePorId: Record<string, string> = {};
+    if (meseroIds.length) {
+      const { data: meseros } = await supabase
+        .from('meseros')
+        .select('id, nombre')
+        .in('id', meseroIds);
+      nombrePorId = Object.fromEntries(
+        (meseros ?? []).map((m: { id: string | number; nombre: string }) => [String(m.id), m.nombre]),
+      );
+    }
+
+    const enriquecido = merged.map((i) => ({
+      ...i,
+      atendidoPor: i.mesero_id != null ? nombrePorId[String(i.mesero_id)] ?? null : null,
+    }));
+
+    setItems(enriquecido);
     setLoading(false);
   }, [zonas]);
 

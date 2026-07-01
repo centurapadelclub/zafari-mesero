@@ -172,28 +172,71 @@ Realtime conecte. No modifica datos. Pegame la salida y confirmamos.
 > Alternativa: si agregás `uongnbktkghwkkwllcxa.supabase.co` a la allowlist de
 > egress de este entorno, corro la verificación yo mismo desde acá.
 
-## 🔔 Notas sobre las notificaciones Android (importante)
+## 🔔 Escenarios de notificación (3 comportamientos)
 
-Implementado en `src/lib/notifications.ts` y `app.config.ts`:
+El servidor envía **un solo push data-only de alta prioridad**; el dispositivo
+decide cómo presentarlo. Todo esto **requiere un dev build** (no funciona en
+Expo Go) y **no fue compilado/probado en este entorno** — verificalo en el build.
 
-- **Canal de prioridad MAX** (`AndroidImportance.MAX`) → heads-up + visibilidad
-  `PUBLIC` en pantalla bloqueada + `bypassDnd` (suena aunque esté "No molestar").
-- **Permisos** declarados: `POST_NOTIFICATIONS`, `VIBRATE`, `WAKE_LOCK`,
-  `USE_FULL_SCREEN_INTENT`.
-- **Vibración insistente 5 s / 5 s repetida hasta atender**: se hace con la API
-  `Vibration` de React Native (`startInsistentVibration`), porque el patrón de
-  vibración de un *canal* de Android **solo se reproduce una vez** — no repite
-  indefinidamente. La app vibra mientras haya pendientes y corta al tocar
-  "Atendido".
+| # | Estado del celular | Comportamiento | Vibración | Sonido |
+|---|--------------------|----------------|-----------|--------|
+| **1** | Deslogueado | **Nada** (no hay token) | — | — |
+| **2** | Guardado / pantalla apagada | **Llamada entrante a pantalla completa** (Full Screen Intent) con `ubicacion`, tipo y botón deslizable (→ Atender, ← Ignorar) | Tipo teléfono (fuerte-suave), máx 10 s | Según preferencia |
+| **3** | En uso (pantalla encendida) | **Heads-up** (banner) con la ubicación | Corta, 1 vez (tipo WhatsApp) | Sin sonido |
 
-**Límites honestos (managed Expo):** una notificación tipo "llamada entrante" a
-**pantalla completa real** sobre el lock screen, y vibración persistente con la
-**app totalmente cerrada**, requieren un *Foreground Service* nativo + manejo de
-`full-screen intent`, que excede el flujo managed y necesitaría un módulo/config
-plugin nativo propio. La configuración actual cubre todo lo posible sin eyectar:
-heads-up MAX que despierta la pantalla + vibración insistente al abrir/estando la
-app activa. Si necesitás el comportamiento alarma-total con la app cerrada, se
-puede agregar con un dev build y un pequeño módulo nativo — decime y lo armamos.
+**Esc1 — ciclo del token** (`src/lib/notifications.ts`, `AuthContext`): el token
+FCM se guarda en `push_tokens` **solo al loguear** (`savePushToken`) y se **borra
+al desloguear** (`deletePushToken`). Estando deslogueado no hay token → no llega
+nada. ✅
+
+**Esc2 — llamada entrante** (`IncomingCallScreen`, `SlideToAct`, `incomingCall.ts`):
+- Full Screen Intent con **notifee** (`fullScreenAction`). El config plugin
+  `plugins/withFullScreenIntent.js` marca la `MainActivity` con
+  `showWhenLocked` + `turnScreenOn`; permisos `USE_FULL_SCREEN_INTENT` y
+  `SYSTEM_ALERT_WINDOW` en `app.config.ts`.
+- Botón deslizable: **derecha = Atender** (actualiza estado/`atendido_at`/`mesero_id`
+  en Supabase igual que el botón normal), **izquierda = Ignorar** (descarta sin tocar la BD).
+- Vibración tipo teléfono por máx 10 s; sonido según la preferencia (canal
+  `llamado-call-sound` vs `llamado-call-silent`).
+
+**Esc3 — heads-up** (canal `llamados`, importancia HIGH, `sound: null`): vibración
+corta una vez, sin sonido, auto-dismiss ~5 s (lo maneja el SO). El mesero ve el
+pendiente al entrar a la app.
+
+**Preferencias de sonido** (`PreferencesScreen`, ícono ⚙️ en el header del panel):
+'Sonido + vibración' / 'Solo vibración', guardado en AsyncStorage. **Afecta solo
+al Esc2**; el Esc3 siempre es sin sonido.
+
+**Onboarding** (`OnboardingScreen`, primer login): explica y abre el ajuste de
+Android **"Mostrar sobre otras apps"** (`SYSTEM_ALERT_WINDOW`) vía
+`expo-intent-launcher`. Necesario para el Esc2.
+
+### ⚠️ Lo que hay que verificar/afinar en el dev build
+
+- El disparo del **Esc2 con la app cerrada** depende de que el push data-only
+  llegue a la tarea de background (`src/lib/backgroundTask.ts`). Si en tu build no
+  se dispara de forma confiable (varía por OEM: Xiaomi/Huawei/etc. matan procesos),
+  la alternativa robusta es **`@react-native-firebase/messaging`** con
+  `setBackgroundMessageHandler` llamando a `displayIncomingCall()`. El resto del
+  código (UI, canales, ruteo) queda igual.
+- El sonido del Esc2 lo da el **canal** (suena una vez al llegar). Si querés un
+  *ringtone que suene en loop* mientras aparece la llamada, hay que reproducirlo
+  en JS (p. ej. `expo-audio`) con un asset de sonido — decime y lo agrego.
+- `SYSTEM_ALERT_WINDOW` requiere que el mesero lo **active a mano** la primera vez
+  (por eso el onboarding).
+
+## 🧾 Historial: quién atendió y a qué hora
+
+El historial nativo (`useHistorial` + `FeedCard` en modo `historial`) ya consulta
+`mesero_id` y `atendido_at`, resuelve `mesero_id → meseros.nombre`, y muestra
+**"Atendido por {nombre} · HH:MM"** en cada item. Requiere la migración que agregó
+`mesero_id`/`atendido_at` (ya corrida).
+
+> ⚠️ **La web `/mesero` y `/tablero` es OTRO repositorio** que no está en este
+> proyecto, así que ese cambio no lo puedo hacer desde acá. Del lado de datos ya
+> está todo (columnas `mesero_id` y `atendido_at` pobladas al atender), así que en
+> la web solo hay que hacer el `select` de esas columnas + join a `meseros` para
+> mostrar nombre y hora. Si me pasás acceso a ese repo, lo hago.
 
 ## 📲 Pipeline de push (FCM) — setup completo
 
