@@ -24,6 +24,45 @@ const STORAGE_KEY = 'zafari.mesero.session';
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
+/**
+ * Resuelve las zonas de un mesero: asignaciones.zona_id  →  zonas.nombre.
+ * 1) asignaciones WHERE mesero_id = <id>  → lista de zona_id
+ * 2) zonas WHERE id IN (zona_ids)         → lista de nombre
+ * Los NOMBRES son los que van a session.zonas (para filtrar por ubicacion).
+ * Loguea los errores (antes se ignoraban silenciosamente).
+ */
+async function resolveZonasForMesero(meseroId: Id): Promise<{ zonaIds: Id[]; zonas: string[] }> {
+  const { data: asignaciones, error: aErr } = await supabase
+    .from('asignaciones')
+    .select('id, zona_id, mesero_id')
+    .eq('mesero_id', meseroId)
+    .returns<Asignacion[]>();
+  if (aErr) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] error consultando asignaciones:', aErr.message);
+  }
+
+  const zonaIds = Array.from(
+    new Set((asignaciones ?? []).map((a) => a.zona_id).filter((v) => v != null)),
+  );
+
+  let zonas: string[] = [];
+  if (zonaIds.length) {
+    const { data: zonasRows, error: zErr } = await supabase
+      .from('zonas')
+      .select('id, nombre')
+      .in('id', zonaIds)
+      .returns<Zona[]>();
+    if (zErr) {
+      // eslint-disable-next-line no-console
+      console.warn('[auth] error consultando zonas por id:', zErr.message);
+    }
+    zonas = (zonasRows ?? []).map((z) => z.nombre).filter(Boolean);
+  }
+
+  return { zonaIds, zonas };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<MeseroSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +88,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session?.id]);
 
+  // Recalcular las zonas cada vez que hay sesión (login o restauración). Así, si
+  // una sesión quedó cacheada con zonas: [] (de un login previo o por un error
+  // transitorio), se auto-corrige al reabrir la app SIN necesidad de re-login.
+  useEffect(() => {
+    const mid = session?.id;
+    if (mid == null) return;
+    let cancelled = false;
+    (async () => {
+      const { zonaIds, zonas } = await resolveZonasForMesero(mid);
+      if (cancelled) return;
+      setSession((prev) => {
+        if (!prev || prev.id !== mid) return prev;
+        const changed =
+          prev.zonas.join('|') !== zonas.join('|') || prev.zonaIds.length !== zonaIds.length;
+        if (!changed) return prev;
+        const updated = { ...prev, zonaIds, zonas };
+        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.id]);
+
   const signIn = useCallback(async (nombre: string, pin: string) => {
     const nombreLimpio = nombre.trim();
     if (!nombreLimpio) return { ok: false, error: 'Ingresá tu nombre.' };
@@ -72,26 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { ok: false, error: 'Tu usuario está inactivo. Hablá con el encargado.' };
     }
 
-    // 2) Zonas asignadas: asignaciones.zona_id  →  zonas.nombre
-    const { data: asignaciones } = await supabase
-      .from('asignaciones')
-      .select('id, zona_id, mesero_id')
-      .eq('mesero_id', mesero.id)
-      .returns<Asignacion[]>();
-
-    const zonaIds = Array.from(
-      new Set((asignaciones ?? []).map((a) => a.zona_id).filter((v) => v != null)),
-    );
-
-    let zonas: string[] = [];
-    if (zonaIds.length) {
-      const { data: zonasRows } = await supabase
-        .from('zonas')
-        .select('id, nombre')
-        .in('id', zonaIds)
-        .returns<Zona[]>();
-      zonas = (zonasRows ?? []).map((z) => z.nombre).filter(Boolean);
-    }
+    // 2) Zonas asignadas: asignaciones.zona_id → zonas.nombre
+    const { zonaIds, zonas } = await resolveZonasForMesero(mesero.id);
 
     const newSession: MeseroSession = {
       id: mesero.id,

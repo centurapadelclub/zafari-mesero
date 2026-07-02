@@ -39,6 +39,7 @@ export function PanelScreen() {
       const mid = session?.id;
       let out = `mesero_id: ${JSON.stringify(mid)} (${typeof mid})\n`;
       out += `session.zonas: ${JSON.stringify(session?.zonas ?? [])}\n`;
+      let zonaIds: unknown[] = [];
       try {
         const { data, error: e, count } = await supabase
           .from('asignaciones')
@@ -46,14 +47,18 @@ export function PanelScreen() {
           .eq('mesero_id', mid ?? '');
         out += `asignaciones WHERE mesero_id: count=${count ?? '?'} err=${e ? e.message : 'null'}\n`;
         out += `raw=${JSON.stringify(data)}\n`;
+        zonaIds = (data ?? []).map((a: { zona_id: unknown }) => a.zona_id).filter((v) => v != null);
       } catch (err) {
         out += `asignaciones EXCEPTION: ${String(err)}\n`;
       }
+      // La query que estaba fallando: zonas WHERE id IN (zonaIds) -> nombre
       try {
-        const { count: zc, error: ze } = await supabase
+        const { data: zr, error: ze } = await supabase
           .from('zonas')
-          .select('id', { count: 'exact', head: true });
-        out += `zonas visibles (anon): count=${zc ?? '?'} err=${ze ? ze.message : 'null'}\n`;
+          .select('id, nombre')
+          .in('id', zonaIds as (string | number)[]);
+        out += `zonas WHERE id IN ${JSON.stringify(zonaIds)}: err=${ze ? ze.message : 'null'}\n`;
+        out += `zonas raw=${JSON.stringify(zr)}\n`;
       } catch (err) {
         out += `zonas EXCEPTION: ${String(err)}\n`;
       }
