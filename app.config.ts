@@ -25,7 +25,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     url: 'https://u.expo.dev/1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
   },
   orientation: 'portrait',
-  icon: './assets/icon.png',
+  // Ícono de la app (logo de Zafari). ⚠️ assets/logo-zafari.png es un PLACEHOLDER
+  // generado; reemplazalo por el logo real de la marca (1024x1024).
+  icon: './assets/logo-zafari.png',
   userInterfaceStyle: 'light',
   ios: {
     supportsTablet: true,
@@ -37,10 +39,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Solo es necesario al compilar el dev build / producción, no para `expo start`.
     googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
     adaptiveIcon: {
-      backgroundColor: '#D32F2F',
-      foregroundImage: './assets/android-icon-foreground.png',
-      backgroundImage: './assets/android-icon-background.png',
-      monochromeImage: './assets/android-icon-monochrome.png',
+      // Logo de Zafari sobre fondo oscuro (Android).
+      backgroundColor: '#0d0d0d',
+      foregroundImage: './assets/logo-zafari.png',
     },
     predictiveBackGestureEnabled: false,
     // Permisos para las notificaciones tipo "llamado":
@@ -70,6 +71,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',
+    // Splash screen: logo de Zafari sobre fondo oscuro.
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/logo-zafari.png',
+        imageWidth: 220,
+        resizeMode: 'contain',
+        backgroundColor: '#0d0d0d',
+      },
+    ],
   ],
   extra: {
     eas: {

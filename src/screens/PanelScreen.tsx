@@ -1,16 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { useFeed } from '../hooks/useFeed';
+import { useFeed, ConnStatus } from '../hooks/useFeed';
 import { FeedCard } from '../components/FeedCard';
 import { FeedItem, Id } from '../types/db';
 import { requestNotificationPermissions } from '../lib/notifications';
+import { isSupabaseConfigured } from '../lib/supabase';
+
+const CONN_UI: Record<ConnStatus, { color: string; label: string }> = {
+  connected: { color: '#2E7D32', label: 'Conectado' },
+  connecting: { color: '#F57C00', label: 'Conectando…' },
+  error: { color: '#D32F2F', label: 'Sin conexión' },
+};
 
 export function PanelScreen() {
   const { session } = useAuth();
   const zonas = session?.zonas ?? [];
-  const { items, loading, error, refetch, markAtendido } = useFeed(zonas, session?.id ?? '');
+  const { items, loading, error, realtimeStatus, refetch, markAtendido } = useFeed(
+    zonas,
+    session?.id ?? '',
+  );
   const [busyId, setBusyId] = useState<Id | null>(null);
+  const conn = CONN_UI[realtimeStatus];
 
   // Asegurar permisos y canales de notificación al entrar al panel.
   // La vibración/alerta ya no se maneja acá: la definen los escenarios de
@@ -28,12 +39,23 @@ export function PanelScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerInfo}>
-        <Text style={styles.hola}>Hola, {session?.nombre}</Text>
+        <View style={styles.headerTop}>
+          <Text style={styles.hola}>Hola, {session?.nombre}</Text>
+          <View style={styles.connChip}>
+            <View style={[styles.dot, { backgroundColor: conn.color }]} />
+            <Text style={[styles.connText, { color: conn.color }]}>{conn.label}</Text>
+          </View>
+        </View>
         <Text style={styles.zonas}>
-          {zonas.length ? `Zonas: ${zonas.join(', ')}` : 'Sin zonas asignadas'}
+          {zonas.length ? `Zonas: ${zonas.join(', ')}` : '⚠️ Sin zonas asignadas'}
         </Text>
       </View>
 
+      {!isSupabaseConfigured ? (
+        <Text style={styles.error}>
+          ⚠️ Faltan las credenciales de Supabase en el build (EXPO_PUBLIC_*).
+        </Text>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <FlatList
@@ -61,7 +83,20 @@ export function PanelScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f5f7' },
   headerInfo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   hola: { fontSize: 20, fontWeight: '800', color: '#1a1a1a' },
+  connChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    elevation: 1,
+  },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  connText: { fontSize: 12, fontWeight: '800' },
   zonas: { fontSize: 14, color: '#777', marginTop: 2 },
   error: {
     color: '#fff',

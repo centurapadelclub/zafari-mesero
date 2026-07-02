@@ -55,10 +55,13 @@ function startOfTodayISO(): string {
   return start.toISOString();
 }
 
+export type ConnStatus = 'connecting' | 'connected' | 'error';
+
 interface UseFeedResult {
   items: FeedItem[];
   loading: boolean;
   error: string | null;
+  realtimeStatus: ConnStatus;
   refetch: () => Promise<void>;
   markAtendido: (item: FeedItem) => Promise<void>;
 }
@@ -73,6 +76,7 @@ export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<ConnStatus>('connecting');
 
   const zonasRef = useRef(zonas);
   zonasRef.current = zonas;
@@ -104,7 +108,10 @@ export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
     ]);
 
     if (llamadosRes.error || pedidosRes.error) {
-      setError('No se pudieron cargar los llamados.');
+      const msg = llamadosRes.error?.message ?? pedidosRes.error?.message ?? 'error desconocido';
+      // eslint-disable-next-line no-console
+      console.error('[useFeed] error en la consulta inicial:', llamadosRes.error, pedidosRes.error);
+      setError(`No se pudieron cargar los llamados: ${msg}`);
       setLoading(false);
       return;
     }
@@ -130,7 +137,14 @@ export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
         fetchActivos();
       })
-      .subscribe();
+      .subscribe((status) => {
+        // eslint-disable-next-line no-console
+        console.log('[useFeed] realtime status:', status);
+        if (status === 'SUBSCRIBED') setRealtimeStatus('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED')
+          setRealtimeStatus('error');
+        else setRealtimeStatus('connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -166,7 +180,7 @@ export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
     [meseroId, fetchActivos],
   );
 
-  return { items, loading, error, refetch: fetchActivos, markAtendido };
+  return { items, loading, error, realtimeStatus, refetch: fetchActivos, markAtendido };
 }
 
 /**
