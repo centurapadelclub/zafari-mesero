@@ -13,13 +13,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
-import {
-  supabase,
-  isSupabaseConfigured,
-  supabaseUrlPreview,
-  supabaseCredsSource,
-} from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
+const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+const UPDATE_ID = Updates.updateId ? Updates.updateId.slice(0, 8) : 'dev';
+const VERSION_TEXT = `v${APP_VERSION} · update ${UPDATE_ID}`;
 
 interface MeseroOption {
   id: string | number;
@@ -151,14 +152,11 @@ export function LoginScreen() {
               <Text style={styles.botonText}>Entrar</Text>
             )}
           </Pressable>
-
-          {/* Diagnóstico: confirma que la URL de Supabase llega al build. */}
-          <Text style={styles.debug}>
-            Supabase [{supabaseCredsSource}]: {supabaseUrlPreview}
-            {isSupabaseConfigured ? '' : ' ⚠️ sin credenciales'}
-          </Text>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Versión de la app + número de update, discreto al fondo. */}
+      <Text style={styles.version}>{VERSION_TEXT}</Text>
 
       {/* Modal selector de nombre */}
       <Modal visible={pickerOpen} transparent animationType="slide" onRequestClose={() => setPickerOpen(false)}>
@@ -238,7 +236,13 @@ const styles = StyleSheet.create({
   },
   botonPressed: { backgroundColor: '#B71C1C' },
   botonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  debug: { marginTop: 16, fontSize: 11, color: '#aaa', textAlign: 'center' },
+  version: {
+    position: 'absolute',
+    bottom: 16,
+    alignSelf: 'center',
+    fontSize: 11,
+    color: '#bbb',
+  },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     backgroundColor: '#fff',
