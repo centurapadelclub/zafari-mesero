@@ -1,7 +1,10 @@
 import { Platform, Vibration } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import notifee, { AndroidImportance, AndroidVisibility } from '@notifee/react-native';
+import notifee, {
+  AndroidImportance,
+  AndroidVisibility,
+  AuthorizationStatus,
+} from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
 import { supabase } from './supabase';
 import { Id } from '../types/db';
@@ -32,31 +35,20 @@ const PATTERN_CALL = [0, 800, 300, 500, 300];
 const CALL_VIBRATION_MAX_MS = 10000;
 
 /**
- * Handler en primer plano (expo-notifications): cuando llega un push con la app
- * abierta mostramos banner (Esc3), sin sonido. La vibración corta la hace
- * vibrateShort() desde el listener (ver App.tsx).
+ * Crea/actualiza los canales de notificación (todo con notifee). Idempotente.
+ * En notifee, omitir `sound` = SIN sonido; `sound: 'default'` = sonido del sistema.
  */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false, // Esc3: sin sonido
-    shouldSetBadge: false,
-  }),
-});
-
-/** Crea/actualiza los canales de notificación. Idempotente. */
 export async function ensureChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
-  // Esc3: heads-up con vibración corta y SIN sonido.
-  await Notifications.setNotificationChannelAsync(CHANNEL_HEADSUP, {
+  // Esc3: heads-up con vibración corta y SIN sonido (sin campo `sound`).
+  await notifee.createChannel({
+    id: CHANNEL_HEADSUP,
     name: 'Llamados (en uso)',
-    importance: Notifications.AndroidImportance.HIGH,
+    importance: AndroidImportance.HIGH,
+    visibility: AndroidVisibility.PUBLIC,
+    vibration: true,
     vibrationPattern: PATTERN_SHORT,
-    enableVibrate: true,
-    sound: null, // sin sonido
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 
   // Esc2: canales para la llamada entrante (Full Screen Intent lo arma notifee).
@@ -87,18 +79,13 @@ export async function callChannelForPref(): Promise<string> {
   return pref === 'vibration_only' ? CHANNEL_CALL_SILENT : CHANNEL_CALL_SOUND;
 }
 
-// ---- Permisos ----
+// ---- Permisos (vía notifee) ----
 export async function requestNotificationPermissions(): Promise<boolean> {
   await ensureChannels();
-  const settings = await Notifications.getPermissionsAsync();
-  let status = settings.status;
-  if (status !== 'granted') {
-    const req = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowSound: true, allowBadge: true },
-    });
-    status = req.status;
-  }
-  return status === 'granted';
+  // En Android 13+ dispara el prompt de POST_NOTIFICATIONS; en versiones
+  // anteriores devuelve AUTHORIZED directamente.
+  const settings = await notifee.requestPermission();
+  return settings.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
 }
 
 // ---- Token FCM (vía @react-native-firebase/messaging) ----

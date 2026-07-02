@@ -57,17 +57,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png',
   },
   plugins: [
-    [
-      'expo-notifications',
-      {
-        // Sin `color`: definirlo hace que expo-notifications inyecte el meta-data
-        // com.google.firebase.messaging.default_notification_color, que choca con
-        // el que ya define @react-native-firebase/messaging (@color/white) y rompe
-        // el manifest merger. Dejamos que gane el de RNFirebase (blanco).
-        // Permite que las notificaciones despierten la app en segundo plano.
-        enableBackgroundRemoteNotifications: true,
-      },
-    ],
+    // NOTA: NO usamos expo-notifications. Toda la mensajería FCM es de
+    // @react-native-firebase/messaging y la UI/canales son de notifee. Así
+    // evitamos que dos librerías declaren el meta-data
+    // com.google.firebase.messaging.default_notification_color y rompan el
+    // manifest merger de Android.
+    //
     // Firebase Cloud Messaging nativo (token + background handler, Esc2).
     '@react-native-firebase/app',
     // RNFirebase en iOS requiere frameworks estáticos.
@@ -75,10 +70,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',
-    // Elimina el meta-data default_notification_color de nuestro manifest para
-    // que gane el @color/white de @react-native-firebase/messaging y no rompa el
-    // manifest merger. Va AL FINAL (después de expo-notifications).
-    './plugins/withRemoveFcmDefaultColor',
   ],
   extra: {
     eas: {
