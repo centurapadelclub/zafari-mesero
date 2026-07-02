@@ -149,7 +149,11 @@ export function useFeed(zonas: string[], meseroId: Id): UseFeedResult {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchActivos]);
+    // Re-ejecuta (refetch + re-suscribe) cuando cambian las zonas del mesero.
+    // Sin esto, si las zonas llegan DESPUÉS del montaje (auto-refresh de la
+    // sesión), el feed se quedaba vacío para siempre.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchActivos, zonas.join('|')]);
 
   /**
    * Marca un item como atendido por el mesero actual.

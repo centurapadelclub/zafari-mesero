@@ -98,6 +98,9 @@ export function PanelScreen() {
       {/* DEBUG TEMPORAL — cadena mesero→asignaciones→zonas (quitar luego) */}
       <ScrollView style={styles.debugBox} nestedScrollEnabled>
         <Text style={styles.debugTitle}>🔧 DEBUG zonas</Text>
+        <Text style={styles.debugText}>
+          session.zonas EN VIVO = {JSON.stringify(session?.zonas ?? [])}
+        </Text>
         <Text style={styles.debugText}>{zonasRaw}</Text>
       </ScrollView>
 
