@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useFeed, ConnStatus } from '../hooks/useFeed';
 import { FeedCard } from '../components/FeedCard';
 import { FeedItem, Id } from '../types/db';
 import { requestNotificationPermissions } from '../lib/notifications';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 const CONN_UI: Record<ConnStatus, { color: string; label: string }> = {
   connected: { color: '#2E7D32', label: 'Conectado' },
@@ -29,6 +29,39 @@ export function PanelScreen() {
   useEffect(() => {
     requestNotificationPermissions();
   }, []);
+
+  // ---- DIAGNÓSTICO TEMPORAL: zonas / asignaciones ----
+  // Muestra el mesero_id en uso y el resultado RAW de la query de asignaciones
+  // para detectar si falla por mesero_id, por el join a zonas, o por RLS.
+  const [asigDebug, setAsigDebug] = useState<string>('cargando diagnóstico…');
+  useEffect(() => {
+    (async () => {
+      const mid = session?.id;
+      let out = `mesero_id: ${JSON.stringify(mid)} (${typeof mid})\n`;
+      out += `session.zonas: ${JSON.stringify(session?.zonas ?? [])}\n`;
+      try {
+        const { data, error: e, count } = await supabase
+          .from('asignaciones')
+          .select('*', { count: 'exact' })
+          .eq('mesero_id', mid ?? '');
+        out += `asignaciones WHERE mesero_id: count=${count ?? '?'} err=${e ? e.message : 'null'}\n`;
+        out += `raw=${JSON.stringify(data)}\n`;
+      } catch (err) {
+        out += `asignaciones EXCEPTION: ${String(err)}\n`;
+      }
+      try {
+        const { count: zc, error: ze } = await supabase
+          .from('zonas')
+          .select('id', { count: 'exact', head: true });
+        out += `zonas visibles (anon): count=${zc ?? '?'} err=${ze ? ze.message : 'null'}\n`;
+      } catch (err) {
+        out += `zonas EXCEPTION: ${String(err)}\n`;
+      }
+      // eslint-disable-next-line no-console
+      console.log('[PanelDebug]\n' + out);
+      setAsigDebug(out);
+    })();
+  }, [session?.id]);
 
   const onAtendido = async (item: FeedItem) => {
     setBusyId(item.id);
@@ -57,6 +90,12 @@ export function PanelScreen() {
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {/* DIAGNÓSTICO TEMPORAL — quitar cuando se resuelva lo de zonas */}
+      <ScrollView style={styles.debugBox} nestedScrollEnabled>
+        <Text style={styles.debugTitle}>🔧 DEBUG asignaciones</Text>
+        <Text style={styles.debugText}>{asigDebug}</Text>
+      </ScrollView>
 
       <FlatList
         data={items}
@@ -107,6 +146,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontWeight: '600',
   },
+  debugBox: {
+    maxHeight: 150,
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: '#111',
+    borderRadius: 8,
+    padding: 10,
+  },
+  debugTitle: { color: '#ffb300', fontSize: 11, fontWeight: '800', marginBottom: 4 },
+  debugText: { color: '#8ef', fontSize: 10, fontFamily: 'monospace' },
   list: { padding: 16, flexGrow: 1 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyEmoji: { fontSize: 48, color: '#2E7D32' },

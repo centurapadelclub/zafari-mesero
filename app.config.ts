@@ -75,7 +75,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'expo-splash-screen',
       {
         image: './assets/logo-zafari-bg.png',
-        imageWidth: 220,
+        // La imagen ya trae ~35% de margen; con este ancho el símbolo queda
+        // proporcionado y centrado, con aire alrededor.
+        imageWidth: 300,
         resizeMode: 'contain',
         backgroundColor: '#0d0d0d',
       },

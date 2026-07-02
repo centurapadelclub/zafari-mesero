@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -96,7 +97,11 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.logoWrap}>
-          <Text style={styles.logo}>Zafari</Text>
+          <Image
+            source={require('../../assets/logo-zafari.png')}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
           <Text style={styles.subtitle}>App de meseros</Text>
         </View>
 
@@ -194,8 +199,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
   logoWrap: { alignItems: 'center', marginBottom: 40 },
-  logo: { fontSize: 44, fontWeight: '900', color: '#D32F2F', letterSpacing: 1 },
-  subtitle: { fontSize: 16, color: '#777', marginTop: 4 },
+  logoImg: { width: 180, height: 180, borderRadius: 24, backgroundColor: '#0d0d0d' },
+  subtitle: { fontSize: 16, color: '#777', marginTop: 8 },
   form: { gap: 6 },
   label: { fontSize: 14, fontWeight: '700', color: '#444', marginTop: 12 },
   input: {
