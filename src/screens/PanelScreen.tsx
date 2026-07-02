@@ -30,27 +30,42 @@ export function PanelScreen() {
     requestNotificationPermissions();
   }, []);
 
-  // ---- DEBUG TEMPORAL: estructura de la tabla `zonas` ----
-  // Muestra el RAW de zonas.select('*').limit(3) para ver el nombre EXACTO de la
-  // columna que contiene el nombre de la zona. Quitar cuando se confirme.
-  const [zonasRaw, setZonasRaw] = useState<string>('cargando zonas…');
+  // ---- DEBUG TEMPORAL: cadena completa mesero → asignaciones → zonas ----
+  // Replica en pantalla exactamente lo que hace resolveZonasForMesero, paso a
+  // paso, para ver dónde se corta. Quitar cuando se confirme.
+  const [zonasRaw, setZonasRaw] = useState<string>('cargando…');
   useEffect(() => {
     (async () => {
+      const mid = session?.id;
+      let o = `mesero_id=${JSON.stringify(mid)} (${typeof mid})\n`;
+      o += `session.zonas=${JSON.stringify(session?.zonas ?? [])}\n`;
       try {
-        const { data, error: e } = await supabase.from('zonas').select('*').limit(3);
-        const cols = data && data[0] ? Object.keys(data[0]) : [];
-        const out =
-          `err=${e ? e.message : 'null'}\n` +
-          `columnas=${JSON.stringify(cols)}\n` +
-          `raw=${JSON.stringify(data)}`;
-        // eslint-disable-next-line no-console
-        console.log('[zonasRaw]\n' + out);
-        setZonasRaw(out);
+        const asig = await supabase.from('asignaciones').select('*').eq('mesero_id', mid ?? '');
+        o += `[1] asignaciones err=${asig.error ? asig.error.message : 'ok'}\n`;
+        o += `    raw=${JSON.stringify(asig.data)}\n`;
+        const zonaIds = (asig.data ?? [])
+          .map((a: { zona_id?: unknown }) => a.zona_id)
+          .filter((v) => v != null);
+        o += `[2] zonaIds=${JSON.stringify(zonaIds)}\n`;
+        if (zonaIds.length) {
+          const z = await supabase
+            .from('zonas')
+            .select('*')
+            .in('id', zonaIds as (string | number)[]);
+          o += `[3] zonas err=${z.error ? z.error.message : 'ok'}\n`;
+          o += `    raw=${JSON.stringify(z.data)}\n`;
+          o += `[4] columnas=${z.data && z.data[0] ? JSON.stringify(Object.keys(z.data[0])) : '[]'}\n`;
+        } else {
+          o += `[3] (sin zonaIds → no se consulta zonas)\n`;
+        }
       } catch (err) {
-        setZonasRaw('EXCEPTION: ' + String(err));
+        o += `EXCEPTION: ${String(err)}\n`;
       }
+      // eslint-disable-next-line no-console
+      console.log('[dbgZonas]\n' + o);
+      setZonasRaw(o);
     })();
-  }, []);
+  }, [session?.id]);
 
   const onAtendido = async (item: FeedItem) => {
     setBusyId(item.id);
@@ -80,9 +95,9 @@ export function PanelScreen() {
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {/* DEBUG TEMPORAL — estructura de la tabla zonas (quitar luego) */}
+      {/* DEBUG TEMPORAL — cadena mesero→asignaciones→zonas (quitar luego) */}
       <ScrollView style={styles.debugBox} nestedScrollEnabled>
-        <Text style={styles.debugTitle}>🔧 zonas.select('*').limit(3)</Text>
+        <Text style={styles.debugTitle}>🔧 DEBUG zonas</Text>
         <Text style={styles.debugText}>{zonasRaw}</Text>
       </ScrollView>
 
