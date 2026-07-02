@@ -26,7 +26,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   orientation: 'portrait',
   // Ícono de la app (logo de Zafari).
-  icon: './assets/logo-zafari.png',
+  icon: './assets/logo-zafari-bg.png',
   userInterfaceStyle: 'light',
   ios: {
     supportsTablet: true,
@@ -40,7 +40,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     adaptiveIcon: {
       // Logo de Zafari sobre fondo oscuro (Android).
       backgroundColor: '#0d0d0d',
-      foregroundImage: './assets/logo-zafari.png',
+      foregroundImage: './assets/logo-zafari-bg.png',
     },
     predictiveBackGestureEnabled: false,
     // Permisos para las notificaciones tipo "llamado":
@@ -74,7 +74,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        image: './assets/logo-zafari.png',
+        image: './assets/logo-zafari-bg.png',
         imageWidth: 220,
         resizeMode: 'contain',
         backgroundColor: '#0d0d0d',
