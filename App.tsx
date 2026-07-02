@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import notifee from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ensureChannels } from './src/lib/notifications';
@@ -11,33 +12,64 @@ import { navigateToIncomingCall } from './src/navigation/navigationRef';
 
 export default function App() {
   useEffect(() => {
-    ensureChannels();
+    // Cada bloque va protegido: si un módulo nativo no está disponible, no debe
+    // tumbar el arranque de la app.
+    try {
+      ensureChannels();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[App] ensureChannels falló:', err);
+    }
 
-    // Esc3: con la app abierta, un push llega como heads-up (banner) + vibración
-    // corta, sin sonido.
-    const unsubOnMessage = messaging().onMessage(async (remoteMessage) => {
-      const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-      if (call) await displayHeadsUp(call);
-    });
+    let unsubOnMessage = () => {};
+    try {
+      // Esc3: con la app abierta, un push llega como heads-up + vibración corta.
+      unsubOnMessage = messaging().onMessage(async (remoteMessage) => {
+        try {
+          const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
+          if (call) await displayHeadsUp(call);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[App] error en onMessage:', err);
+        }
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[App] messaging().onMessage no disponible:', err);
+    }
 
-    // Eventos de notifee en primer plano: al tocar la notificación, abrir la
-    // pantalla de llamada / pendiente.
-    const unsubNotifee = notifee.onForegroundEvent((event) =>
-      handleNotifeeEvent(event, navigateToIncomingCall),
-    );
+    let unsubNotifee = () => {};
+    try {
+      unsubNotifee = notifee.onForegroundEvent((event) =>
+        handleNotifeeEvent(event, navigateToIncomingCall),
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[App] notifee.onForegroundEvent no disponible:', err);
+    }
 
     return () => {
-      unsubOnMessage();
-      unsubNotifee();
+      try {
+        unsubOnMessage();
+      } catch {
+        // ignorar
+      }
+      try {
+        unsubNotifee();
+      } catch {
+        // ignorar
+      }
     };
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <RootNavigator />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <RootNavigator />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

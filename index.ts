@@ -4,30 +4,50 @@ import messaging from '@react-native-firebase/messaging';
 
 import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
+import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
 
-/**
- * Esc2 (app en segundo plano o CERRADA): handler de background de RNFirebase.
- * Cuando llega el push data-only, arma la llamada entrante a pantalla completa
- * (notifee Full Screen Intent). Es el camino robusto para celulares que matan
- * procesos (Xiaomi/Huawei/Samsung viejos). DEBE registrarse en el nivel superior.
- */
-messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-  if (call) await displayIncomingCall(call);
-});
+// Capturar errores JS no atrapados (los logea en vez de cerrar en silencio).
+installGlobalErrorHandler();
 
 /**
- * Handler de eventos de notifee en segundo plano: si el usuario toca la
- * notificación de llamada, al abrir la app se rutea a la pantalla.
+ * Esc2 (app en segundo plano o CERRADA): handler de background de RNFirebase.
+ * Envuelto en try-catch: si el módulo nativo no está disponible, NO tumba la app
+ * al iniciar (solo se pierde el push en background, que se diagnostica aparte).
  */
-notifee.onBackgroundEvent(async ({ type, detail }) => {
-  if (type === EventType.PRESS) {
-    const call = parseCallData(detail.notification?.data as Record<string, unknown> | undefined);
-    if (call) navigateToIncomingCall(callToRoute(call));
-  }
-});
+try {
+  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+    try {
+      const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
+      if (call) await displayIncomingCall(call);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[index] error en background message handler:', err);
+    }
+  });
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('[index] messaging() no disponible (setBackgroundMessageHandler):', err);
+}
+
+/** Handler de eventos de notifee en segundo plano (envuelto por seguridad). */
+try {
+  notifee.onBackgroundEvent(async ({ type, detail }) => {
+    try {
+      if (type === EventType.PRESS) {
+        const call = parseCallData(detail.notification?.data as Record<string, unknown> | undefined);
+        if (call) navigateToIncomingCall(callToRoute(call));
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[index] error en notifee background event:', err);
+    }
+  });
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('[index] notifee.onBackgroundEvent no disponible:', err);
+}
 
 // registerRootComponent llama a AppRegistry.registerComponent('main', () => App)
 registerRootComponent(App);

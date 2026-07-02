@@ -40,37 +40,41 @@ const CALL_VIBRATION_MAX_MS = 10000;
  */
 export async function ensureChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
+  try {
+    // Esc3: heads-up con vibración corta y SIN sonido (sin campo `sound`).
+    await notifee.createChannel({
+      id: CHANNEL_HEADSUP,
+      name: 'Llamados (en uso)',
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      vibration: true,
+      vibrationPattern: PATTERN_SHORT,
+    });
 
-  // Esc3: heads-up con vibración corta y SIN sonido (sin campo `sound`).
-  await notifee.createChannel({
-    id: CHANNEL_HEADSUP,
-    name: 'Llamados (en uso)',
-    importance: AndroidImportance.HIGH,
-    visibility: AndroidVisibility.PUBLIC,
-    vibration: true,
-    vibrationPattern: PATTERN_SHORT,
-  });
-
-  // Esc2: canales para la llamada entrante (Full Screen Intent lo arma notifee).
-  await notifee.createChannel({
-    id: CHANNEL_CALL_SOUND,
-    name: 'Llamada entrante (sonido)',
-    importance: AndroidImportance.HIGH,
-    visibility: AndroidVisibility.PUBLIC,
-    sound: 'default',
-    vibration: true,
-    vibrationPattern: PATTERN_CALL,
-    bypassDnd: true,
-  });
-  await notifee.createChannel({
-    id: CHANNEL_CALL_SILENT,
-    name: 'Llamada entrante (solo vibración)',
-    importance: AndroidImportance.HIGH,
-    visibility: AndroidVisibility.PUBLIC,
-    vibration: true,
-    vibrationPattern: PATTERN_CALL,
-    bypassDnd: true,
-  });
+    // Esc2: canales para la llamada entrante (Full Screen Intent lo arma notifee).
+    await notifee.createChannel({
+      id: CHANNEL_CALL_SOUND,
+      name: 'Llamada entrante (sonido)',
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      sound: 'default',
+      vibration: true,
+      vibrationPattern: PATTERN_CALL,
+      bypassDnd: true,
+    });
+    await notifee.createChannel({
+      id: CHANNEL_CALL_SILENT,
+      name: 'Llamada entrante (solo vibración)',
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      vibration: true,
+      vibrationPattern: PATTERN_CALL,
+      bypassDnd: true,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[notifications] no se pudieron crear los canales (notifee):', err);
+  }
 }
 
 /** El canal de la llamada entrante según la preferencia de sonido guardada. */
@@ -81,11 +85,17 @@ export async function callChannelForPref(): Promise<string> {
 
 // ---- Permisos (vía notifee) ----
 export async function requestNotificationPermissions(): Promise<boolean> {
-  await ensureChannels();
-  // En Android 13+ dispara el prompt de POST_NOTIFICATIONS; en versiones
-  // anteriores devuelve AUTHORIZED directamente.
-  const settings = await notifee.requestPermission();
-  return settings.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
+  try {
+    await ensureChannels();
+    // En Android 13+ dispara el prompt de POST_NOTIFICATIONS; en versiones
+    // anteriores devuelve AUTHORIZED directamente.
+    const settings = await notifee.requestPermission();
+    return settings.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[notifications] requestPermission falló (notifee):', err);
+    return false;
+  }
 }
 
 // ---- Token FCM (vía @react-native-firebase/messaging) ----

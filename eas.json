@@ -13,6 +13,10 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uongnbktkghwkkwllcxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_gucs-SiKSWwcN6yzBPriHg_XJ2tCb6k"
       }
     },
     "preview": {
@@ -20,6 +24,10 @@
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uongnbktkghwkkwllcxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_gucs-SiKSWwcN6yzBPriHg_XJ2tCb6k"
       }
     },
     "production": {
@@ -27,6 +35,10 @@
       "channel": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uongnbktkghwkkwllcxa.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_gucs-SiKSWwcN6yzBPriHg_XJ2tCb6k"
       }
     }
   },
