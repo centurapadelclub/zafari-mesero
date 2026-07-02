@@ -60,8 +60,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-notifications',
       {
-        // Color del ícono pequeño de la notificación en Android.
-        color: '#D32F2F',
+        // Sin `color`: definirlo hace que expo-notifications inyecte el meta-data
+        // com.google.firebase.messaging.default_notification_color, que choca con
+        // el que ya define @react-native-firebase/messaging (@color/white) y rompe
+        // el manifest merger. Dejamos que gane el de RNFirebase (blanco).
         // Permite que las notificaciones despierten la app en segundo plano.
         enableBackgroundRemoteNotifications: true,
       },
@@ -73,10 +75,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',
-    // Resuelve el conflicto de merge del meta-data default_notification_color
-    // entre expo-notifications y @react-native-firebase/messaging. Va AL FINAL
-    // (después de expo-notifications, que agrega el meta-data).
-    './plugins/withFcmNotificationColorFix',
+    // Elimina el meta-data default_notification_color de nuestro manifest para
+    // que gane el @color/white de @react-native-firebase/messaging y no rompa el
+    // manifest merger. Va AL FINAL (después de expo-notifications).
+    './plugins/withRemoveFcmDefaultColor',
   ],
   extra: {
     eas: {
