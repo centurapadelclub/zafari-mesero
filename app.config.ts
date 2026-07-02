@@ -73,6 +73,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',
+    // Resuelve el conflicto de merge del meta-data default_notification_color
+    // entre expo-notifications y @react-native-firebase/messaging. Va AL FINAL
+    // (después de expo-notifications, que agrega el meta-data).
+    './plugins/withFcmNotificationColorFix',
   ],
   extra: {
     eas: {
