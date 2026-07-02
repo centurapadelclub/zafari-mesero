@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useFeed, ConnStatus } from '../hooks/useFeed';
 import { FeedCard } from '../components/FeedCard';
 import { FeedItem, Id } from '../types/db';
 import { requestNotificationPermissions } from '../lib/notifications';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
 const CONN_UI: Record<ConnStatus, { color: string; label: string }> = {
   connected: { color: '#2E7D32', label: 'Conectado' },
@@ -28,6 +28,28 @@ export function PanelScreen() {
   // notificación (Esc2 llamada entrante / Esc3 heads-up).
   useEffect(() => {
     requestNotificationPermissions();
+  }, []);
+
+  // ---- DEBUG TEMPORAL: estructura de la tabla `zonas` ----
+  // Muestra el RAW de zonas.select('*').limit(3) para ver el nombre EXACTO de la
+  // columna que contiene el nombre de la zona. Quitar cuando se confirme.
+  const [zonasRaw, setZonasRaw] = useState<string>('cargando zonas…');
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error: e } = await supabase.from('zonas').select('*').limit(3);
+        const cols = data && data[0] ? Object.keys(data[0]) : [];
+        const out =
+          `err=${e ? e.message : 'null'}\n` +
+          `columnas=${JSON.stringify(cols)}\n` +
+          `raw=${JSON.stringify(data)}`;
+        // eslint-disable-next-line no-console
+        console.log('[zonasRaw]\n' + out);
+        setZonasRaw(out);
+      } catch (err) {
+        setZonasRaw('EXCEPTION: ' + String(err));
+      }
+    })();
   }, []);
 
   const onAtendido = async (item: FeedItem) => {
@@ -57,6 +79,12 @@ export function PanelScreen() {
         </Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      {/* DEBUG TEMPORAL — estructura de la tabla zonas (quitar luego) */}
+      <ScrollView style={styles.debugBox} nestedScrollEnabled>
+        <Text style={styles.debugTitle}>🔧 zonas.select('*').limit(3)</Text>
+        <Text style={styles.debugText}>{zonasRaw}</Text>
+      </ScrollView>
 
       <FlatList
         data={items}
@@ -107,6 +135,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontWeight: '600',
   },
+  debugBox: {
+    maxHeight: 170,
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: '#111',
+    borderRadius: 8,
+    padding: 10,
+  },
+  debugTitle: { color: '#ffb300', fontSize: 11, fontWeight: '800', marginBottom: 4 },
+  debugText: { color: '#8ef', fontSize: 11, fontFamily: 'monospace' },
   list: { padding: 16, flexGrow: 1 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyEmoji: { fontSize: 48, color: '#2E7D32' },
