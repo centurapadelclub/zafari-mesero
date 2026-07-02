@@ -25,8 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     url: 'https://u.expo.dev/1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
   },
   orientation: 'portrait',
-  // Ícono de la app (logo de Zafari). ⚠️ assets/logo-zafari.png es un PLACEHOLDER
-  // generado; reemplazalo por el logo real de la marca (1024x1024).
+  // Ícono de la app (logo de Zafari).
   icon: './assets/logo-zafari.png',
   userInterfaceStyle: 'light',
   ios: {
@@ -87,5 +86,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // projectId de EAS (se puede sobreescribir con la env EAS_PROJECT_ID).
       projectId: process.env.EAS_PROJECT_ID ?? '1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
     },
+    // Credenciales de Supabase embebidas en el config (además de EXPO_PUBLIC_*).
+    // Se leen acá en tiempo de build (cuando las env de EAS están presentes) y
+    // quedan disponibles en runtime vía Constants.expoConfig.extra — más robusto
+    // que depender solo del inlining de process.env en el bundle nativo.
+    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
+    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
   },
 });

@@ -13,7 +13,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import {
+  supabase,
+  isSupabaseConfigured,
+  supabaseUrlPreview,
+  supabaseCredsSource,
+} from '../lib/supabase';
 
 interface MeseroOption {
   id: string | number;
@@ -141,6 +146,12 @@ export function LoginScreen() {
               <Text style={styles.botonText}>Entrar</Text>
             )}
           </Pressable>
+
+          {/* Diagnóstico: confirma que la URL de Supabase llega al build. */}
+          <Text style={styles.debug}>
+            Supabase [{supabaseCredsSource}]: {supabaseUrlPreview}
+            {isSupabaseConfigured ? '' : ' ⚠️ sin credenciales'}
+          </Text>
         </View>
       </KeyboardAvoidingView>
 
@@ -222,6 +233,7 @@ const styles = StyleSheet.create({
   },
   botonPressed: { backgroundColor: '#B71C1C' },
   botonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  debug: { marginTop: 16, fontSize: 11, color: '#aaa', textAlign: 'center' },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
     backgroundColor: '#fff',
