@@ -51,14 +51,19 @@ export function PanelScreen() {
       } catch (err) {
         out += `asignaciones EXCEPTION: ${String(err)}\n`;
       }
-      // La query que estaba fallando: zonas WHERE id IN (zonaIds) -> nombre
+      // La query que estaba fallando: zonas WHERE id IN (zonaIds).
+      // select('*') para ver el objeto COMPLETO y descubrir el nombre real de la
+      // columna del nombre de la zona.
       try {
         const { data: zr, error: ze } = await supabase
           .from('zonas')
-          .select('id, nombre')
+          .select('*')
           .in('id', zonaIds as (string | number)[]);
         out += `zonas WHERE id IN ${JSON.stringify(zonaIds)}: err=${ze ? ze.message : 'null'}\n`;
-        out += `zonas raw=${JSON.stringify(zr)}\n`;
+        out += `zonas RAW (todas las columnas)=${JSON.stringify(zr)}\n`;
+        if (zr && zr[0]) {
+          out += `columnas de zonas: ${JSON.stringify(Object.keys(zr[0]))}\n`;
+        }
       } catch (err) {
         out += `zonas EXCEPTION: ${String(err)}\n`;
       }

@@ -2,7 +2,19 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { deletePushToken, savePushToken } from '../lib/notifications';
-import { Asignacion, Id, Mesero, Zona } from '../types/db';
+import { Asignacion, Id, Mesero } from '../types/db';
+
+// Posibles nombres de la columna con el nombre de la zona (por si no es 'nombre').
+const ZONA_NAME_FIELDS = ['nombre', 'name', 'nombre_zona', 'zona', 'titulo', 'descripcion', 'label'];
+
+/** Extrae el nombre de una fila de `zonas` probando varias columnas posibles. */
+function zonaNombre(z: Record<string, unknown>): string | null {
+  for (const f of ZONA_NAME_FIELDS) {
+    const v = z[f];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
 
 /** Datos de la sesión del mesero que persistimos localmente. */
 export interface MeseroSession {
@@ -48,18 +60,23 @@ async function resolveZonasForMesero(meseroId: Id): Promise<{ zonaIds: Id[]; zon
 
   let zonas: string[] = [];
   if (zonaIds.length) {
+    // select('*') para no depender del nombre exacto de la columna del nombre.
     const { data: zonasRows, error: zErr } = await supabase
       .from('zonas')
-      .select('id, nombre')
+      .select('*')
       .in('id', zonaIds)
-      .returns<Zona[]>();
+      .returns<Record<string, unknown>[]>();
     if (zErr) {
       // eslint-disable-next-line no-console
       console.warn('[auth] error consultando zonas por id:', zErr.message);
     }
-    zonas = (zonasRows ?? []).map((z) => z.nombre).filter(Boolean);
+    // eslint-disable-next-line no-console
+    console.log('[auth] zonas RAW:', JSON.stringify(zonasRows));
+    zonas = (zonasRows ?? []).map(zonaNombre).filter((v): v is string => Boolean(v));
   }
 
+  // eslint-disable-next-line no-console
+  console.log('[auth] zona_ids:', JSON.stringify(zonaIds), '-> se guardará en session.zonas:', JSON.stringify(zonas));
   return { zonaIds, zonas };
 }
 
