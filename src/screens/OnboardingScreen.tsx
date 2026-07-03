@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { setOnboardingDone } from '../lib/preferences';
-import { requestNotificationPermissions } from '../lib/notifications';
+import { requestNotificationPermissions, requestExactAlarmPermission } from '../lib/notifications';
 
 const APP_PACKAGE = 'com.zafari.mesero';
 
@@ -73,6 +73,14 @@ export function OnboardingScreen() {
 
         <Pressable style={styles.botonPrimario} onPress={abrirAjustes} disabled={abriendo}>
           <Text style={styles.botonPrimarioText}>Abrir configuración</Text>
+        </Pressable>
+
+        <Text style={styles.intro}>
+          Además, para que el botón <Text style={styles.bold}>Snooze</Text> vuelva a llamarte a los
+          30 segundos exactos, Android pide permitir <Text style={styles.bold}>alarmas exactas</Text>.
+        </Text>
+        <Pressable style={styles.botonSecundario} onPress={() => requestExactAlarmPermission()}>
+          <Text style={styles.botonSecundarioText}>Permitir alarmas exactas (snooze)</Text>
         </Pressable>
 
         <Pressable style={styles.botonSecundario} onPress={continuar}>

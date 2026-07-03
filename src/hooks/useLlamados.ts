@@ -77,8 +77,14 @@ export function useLlamados(zonas: string[], meseroId: Id) {
   useEffect(() => {
     fetchActivos();
     fetchHistorial();
+    const CH = 'llamados-mesero';
+    // Evitar doble suscripción al mismo topic (ver nota en usePedidos): removemos
+    // cualquier canal previo con ese topic antes de crear el nuevo.
+    supabase.getChannels().forEach((c) => {
+      if (c.topic === `realtime:${CH}` || c.topic === CH) supabase.removeChannel(c);
+    });
     const ch = supabase
-      .channel('llamados-mesero')
+      .channel(CH)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'llamados' }, () => {
         fetchActivos();
         fetchHistorial();

@@ -99,6 +99,22 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+/**
+ * Snooze: abre el ajuste de Android "Permitir alarmas y recordatorios"
+ * (SCHEDULE_EXACT_ALARM). En Android 12+ este permiso NO tiene diálogo runtime:
+ * hay que mandar al usuario a la pantalla de ajustes. Sin él, la notificación de
+ * snooze programada con alarma EXACTA no dispara a los 30 s.
+ */
+export async function requestExactAlarmPermission(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await notifee.openAlarmPermissionSettings();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[notifications] openAlarmPermissionSettings falló:', err);
+  }
+}
+
 // ---- Token FCM (vía @react-native-firebase/messaging) ----
 // Consolidamos toda la mensajería FCM en RNFirebase (token + foreground +
 // background) para el manejo confiable con la app cerrada (ver index.ts).

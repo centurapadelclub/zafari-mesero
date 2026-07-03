@@ -1,6 +1,6 @@
 import { registerRootComponent } from 'expo';
-import notifee, { EventType } from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
+import notifee, { EventType } from '@notifee/react-native';
 
 import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
@@ -8,28 +8,27 @@ import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
 
+/**
+ * ⚠️ LO PRIMERO DE TODO (nivel superior del archivo, antes que cualquier otro
+ * código): el handler de mensajes FCM en segundo plano / app CERRADA. RNFirebase
+ * exige registrarlo en el scope global — si se registra tarde o dentro de un
+ * componente/useEffect, los push con la app cerrada NO se procesan.
+ *
+ * Esc2: el mensaje es data-only de alta prioridad; acá lo convertimos en la
+ * llamada entrante a pantalla completa (Full Screen Intent de notifee).
+ */
+messaging().setBackgroundMessageHandler(async (remoteMessage) => {
+  try {
+    const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
+    if (call) await displayIncomingCall(call);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[index] error en background message handler:', err);
+  }
+});
+
 // Capturar errores JS no atrapados (los logea en vez de cerrar en silencio).
 installGlobalErrorHandler();
-
-/**
- * Esc2 (app en segundo plano o CERRADA): handler de background de RNFirebase.
- * Envuelto en try-catch: si el módulo nativo no está disponible, NO tumba la app
- * al iniciar (solo se pierde el push en background, que se diagnostica aparte).
- */
-try {
-  messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-    try {
-      const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-      if (call) await displayIncomingCall(call);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[index] error en background message handler:', err);
-    }
-  });
-} catch (err) {
-  // eslint-disable-next-line no-console
-  console.error('[index] messaging() no disponible (setBackgroundMessageHandler):', err);
-}
 
 /** Handler de eventos de notifee en segundo plano (envuelto por seguridad). */
 try {

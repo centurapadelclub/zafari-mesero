@@ -133,8 +133,16 @@ export function usePedidos(zonas: string[], meseroId: Id) {
   useEffect(() => {
     fetchActivos();
     fetchHistorial();
+    const CH = 'pedidos-mesero';
+    // Evitar doble suscripción al MISMO topic: si quedó un canal previo sin
+    // limpiar (p. ej. al volver del IncomingCall), reusar el nombre crashea con
+    // "cannot add postgres_changes callbacks for realtime:pedidos-mesero after
+    // subscribe()". Removemos cualquier canal con ese topic antes de crear uno.
+    supabase.getChannels().forEach((c) => {
+      if (c.topic === `realtime:${CH}` || c.topic === CH) supabase.removeChannel(c);
+    });
     const ch = supabase
-      .channel('pedidos-mesero')
+      .channel(CH)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, () => {
         fetchActivos();
         fetchHistorial();
