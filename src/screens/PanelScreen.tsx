@@ -128,24 +128,28 @@ export function PanelScreen() {
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        <Pressable
-          style={[styles.tab, tab === 'llamados' ? styles.tabActive : styles.tabInactive]}
-          onPress={() => setTab('llamados')}
-        >
-          <Text style={[styles.tabText, tab === 'llamados' && styles.tabTextActive]}>
-            📋 Llamados
-          </Text>
+        <View style={styles.tabWrap}>
+          <Pressable
+            style={[styles.tab, tab === 'llamados' ? styles.tabActive : styles.tabInactive]}
+            onPress={() => setTab('llamados')}
+          >
+            <Text style={[styles.tabText, tab === 'llamados' && styles.tabTextActive]}>
+              LLAMADOS
+            </Text>
+          </Pressable>
           <Badge n={llamados.activos.length} />
-        </Pressable>
-        <Pressable
-          style={[styles.tab, tab === 'pedidos' ? styles.tabActive : styles.tabInactive]}
-          onPress={() => setTab('pedidos')}
-        >
-          <Text style={[styles.tabText, tab === 'pedidos' && styles.tabTextActive]}>
-            📝 Pedidos
-          </Text>
+        </View>
+        <View style={styles.tabWrap}>
+          <Pressable
+            style={[styles.tab, tab === 'pedidos' ? styles.tabActive : styles.tabInactive]}
+            onPress={() => setTab('pedidos')}
+          >
+            <Text style={[styles.tabText, tab === 'pedidos' && styles.tabTextActive]}>
+              PEDIDOS
+            </Text>
+          </Pressable>
           <Badge n={pedidos.activos.length} />
-        </Pressable>
+        </View>
       </View>
 
       {!zonas.length ? <Text style={styles.warn}>⚠️ Sin zonas asignadas</Text> : null}
@@ -329,28 +333,32 @@ const styles = StyleSheet.create({
   salirBtn: { paddingVertical: 6, paddingHorizontal: 8 },
   salirText: { color: colors.textDim, fontSize: 15, fontWeight: '700' },
   tabs: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
+  tabWrap: { flex: 1, position: 'relative' },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 12,
     borderWidth: 1,
   },
   tabActive: { backgroundColor: colors.gold, borderColor: colors.gold },
   tabInactive: { backgroundColor: colors.card, borderColor: colors.border },
-  tabText: { color: colors.textDim, fontSize: 15, fontWeight: '800' },
-  tabTextActive: { color: '#000' },
+  tabText: { color: colors.textDim, fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+  tabTextActive: { color: '#fff' },
   badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: colors.red,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   warn: { color: colors.goldDark, textAlign: 'center', marginTop: 10, fontWeight: '700' },
