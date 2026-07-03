@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { deletePushToken, savePushToken } from '../lib/notifications';
-import { Asignacion, Id, Mesero } from '../types/db';
+import { Id, Mesero } from '../types/db';
 
 // Posibles nombres de la columna con el nombre de la zona (por si no es 'nombre').
 const ZONA_NAME_FIELDS = ['nombre', 'name', 'nombre_zona', 'zona', 'titulo', 'descripcion', 'label'];
@@ -44,11 +44,13 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
  * Loguea los errores (antes se ignoraban silenciosamente).
  */
 async function resolveZonasForMesero(meseroId: Id): Promise<{ zonaIds: Id[]; zonas: string[] }> {
+  // OJO: pedimos SOLO zona_id. La tabla asignaciones NO tiene columna `id`, así
+  // que pedir `id` hacía fallar la query (devolvía vacío → session.zonas quedaba []).
   const { data: asignaciones, error: aErr } = await supabase
     .from('asignaciones')
-    .select('id, zona_id, mesero_id')
+    .select('zona_id')
     .eq('mesero_id', meseroId)
-    .returns<Asignacion[]>();
+    .returns<{ zona_id: Id }[]>();
   if (aErr) {
     // eslint-disable-next-line no-console
     console.warn('[auth] error consultando asignaciones:', aErr.message);
