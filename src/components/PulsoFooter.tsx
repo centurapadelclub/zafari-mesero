@@ -2,8 +2,7 @@ import React from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme';
 
-// ⚠️ Ajustar al número/link real de Pulso (el de la web).
-const PULSO_WHATSAPP = 'https://wa.me/5490000000000';
+const PULSO_WHATSAPP = 'https://wa.me/526865476589';
 
 export function PulsoFooter() {
   return (

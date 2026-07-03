@@ -8,30 +8,56 @@ import {
   PEDIDO_PENDIENTE,
   Pedido,
   PedidoItem,
+  PedidoItemModificador,
   PEDIDO_ITEMS_TABLE,
+  PEDIDO_ITEM_MODIFICADORES_TABLE,
 } from '../types/db';
 
-// --- Extracción defensiva de columnas del item (nombres reales pueden variar) ---
-function pick(row: Record<string, unknown>, fields: string[]): unknown {
-  for (const f of fields) if (row[f] != null) return row[f];
-  return null;
-}
-function asStr(v: unknown): string | null {
-  return v == null ? null : String(v);
-}
 function asNum(v: unknown): number | null {
+  if (v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
-function itemFromRow(r: Record<string, unknown>): PedidoItem {
+
+/** Fila de pedido_items -> PedidoItem (sin modificadores todavía). */
+function itemBaseFromRow(r: Record<string, unknown>): PedidoItem {
   return {
-    pedido_id: (pick(r, ['pedido_id', 'order_id']) ?? '') as Id,
-    nombre: asStr(pick(r, ['nombre', 'name', 'producto', 'descripcion', 'titulo', 'item'])) ?? '(item)',
-    cantidad: asNum(pick(r, ['cantidad', 'qty', 'cant', 'cantidad_pedida'])) ?? 1,
-    precio: asNum(pick(r, ['precio', 'price', 'precio_unitario', 'subtotal'])),
-    modificadores: asStr(pick(r, ['modificadores', 'modifiers', 'extras', 'opciones', 'adicionales'])),
-    nota: asStr(pick(r, ['nota', 'notas', 'note', 'comentario', 'observacion', 'observaciones'])),
+    id: r.id as Id,
+    pedido_id: r.pedido_id as Id,
+    nombre: r.nombre_producto != null ? String(r.nombre_producto) : '(item)',
+    cantidad: asNum(r.cantidad) ?? 1,
+    precioUnitario: asNum(r.precio_unitario),
+    subtotal: asNum(r.subtotal),
+    modificadores: [],
   };
+}
+
+/** Adjunta a cada item su lista de modificadores (pedido_item_modificadores). */
+async function attachModificadores(items: PedidoItem[]): Promise<void> {
+  const itemIds = items.map((i) => i.id).filter((v) => v != null) as Id[];
+  if (!itemIds.length) return;
+  const { data, error } = await supabase
+    .from(PEDIDO_ITEM_MODIFICADORES_TABLE)
+    .select('*')
+    .in('pedido_item_id', itemIds)
+    .returns<Record<string, unknown>[]>();
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[usePedidos] modificadores:', error.message);
+    return;
+  }
+  const byItem: Record<string, PedidoItemModificador[]> = {};
+  for (const m of data ?? []) {
+    const key = String(m.pedido_item_id);
+    (byItem[key] ??= []).push({
+      nombre_modificador: m.nombre_modificador != null ? String(m.nombre_modificador) : null,
+      nombre_opcion: m.nombre_opcion != null ? String(m.nombre_opcion) : '',
+      precio_extra: asNum(m.precio_extra),
+    });
+  }
+  for (const it of items) {
+    if (it.id != null) it.modificadores = byItem[String(it.id)] ?? [];
+  }
 }
 
 const ACTIVOS = [PEDIDO_PENDIENTE, PEDIDO_EN_PREPARACION];
@@ -128,7 +154,7 @@ export function usePedidos(zonas: string[], meseroId: Id) {
     [meseroId, fetchActivos, fetchHistorial],
   );
 
-  /** Trae los items/detalle de un pedido (tabla asumida PEDIDO_ITEMS_TABLE). */
+  /** Trae los items (con modificadores) de un pedido. */
   const fetchPedidoItems = useCallback(async (pedidoId: Id): Promise<PedidoItem[]> => {
     const { data, error: e } = await supabase
       .from(PEDIDO_ITEMS_TABLE)
@@ -140,10 +166,12 @@ export function usePedidos(zonas: string[], meseroId: Id) {
       console.error('[usePedidos] items:', e.message);
       return [];
     }
-    return (data ?? []).map(itemFromRow);
+    const items = (data ?? []).map(itemBaseFromRow);
+    await attachModificadores(items);
+    return items;
   }, []);
 
-  /** Trae los items de varios pedidos de una sola vez, agrupados por pedido_id. */
+  /** Trae los items (con modificadores) de varios pedidos, agrupados por pedido_id. */
   const fetchItemsForPedidos = useCallback(
     async (ids: Id[]): Promise<Record<string, PedidoItem[]>> => {
       if (!ids.length) return {};
@@ -157,9 +185,10 @@ export function usePedidos(zonas: string[], meseroId: Id) {
         console.error('[usePedidos] items batch:', e.message);
         return {};
       }
+      const items = (data ?? []).map(itemBaseFromRow);
+      await attachModificadores(items);
       const map: Record<string, PedidoItem[]> = {};
-      for (const row of data ?? []) {
-        const it = itemFromRow(row);
+      for (const it of items) {
         const key = String(it.pedido_id);
         (map[key] ??= []).push(it);
       }

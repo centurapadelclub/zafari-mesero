@@ -80,25 +80,27 @@ export interface Pedido {
 }
 
 /**
- * ⚠️ ESQUEMA ASUMIDO — items/detalle de un pedido.
- * La tabla `pedidos` no trae el detalle de lo pedido, así que asumo una tabla
- * aparte. Ajustá PEDIDO_ITEMS_TABLE y los campos según tu esquema real.
- *
- * Tabla asumida: `pedido_items`
- *   pedido_id (FK a pedidos.id), nombre (producto), cantidad, precio,
- *   modificadores (texto), nota (texto).
- * La extracción prueba varios nombres de columna (ver usePedidos.itemNombre).
+ * Detalle de un pedido (esquema real):
+ *   pedido_items: id, pedido_id, nombre_producto, cantidad, precio_unitario, subtotal
+ *   pedido_item_modificadores: pedido_item_id, nombre_modificador, nombre_opcion, precio_extra
  */
 export const PEDIDO_ITEMS_TABLE = 'pedido_items';
+export const PEDIDO_ITEM_MODIFICADORES_TABLE = 'pedido_item_modificadores';
+
+export interface PedidoItemModificador {
+  nombre_modificador?: string | null;
+  nombre_opcion: string;
+  precio_extra?: number | null;
+}
 
 export interface PedidoItem {
   id?: Id;
   pedido_id: Id;
-  nombre: string; // nombre del producto
+  nombre: string; // nombre_producto
   cantidad: number;
-  precio?: number | null;
-  modificadores?: string | null;
-  nota?: string | null;
+  precioUnitario?: number | null; // precio_unitario
+  subtotal?: number | null;
+  modificadores: PedidoItemModificador[];
 }
 
 /** Item unificado para mostrar llamados y pedidos en la misma lista. */

@@ -48,10 +48,16 @@ export function PedidoDetalleModal({ pedido, items, loading, onClose }: Props) {
                     <Text style={styles.qty}>{it.cantidad}×</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.name}>{it.nombre}</Text>
-                      {it.modificadores ? <Text style={styles.mod}>{it.modificadores}</Text> : null}
-                      {it.nota ? <Text style={styles.nota}>📝 {it.nota}</Text> : null}
+                      {it.modificadores.map((m, j) => (
+                        <Text key={j} style={styles.mod}>
+                          + {m.nombre_opcion}
+                          {m.precio_extra ? ` (${money(m.precio_extra)})` : ''}
+                        </Text>
+                      ))}
                     </View>
-                    {it.precio != null ? <Text style={styles.precio}>{money(it.precio)}</Text> : null}
+                    {it.subtotal != null ? (
+                      <Text style={styles.precio}>{money(it.subtotal)}</Text>
+                    ) : null}
                   </View>
                 ))
               ) : (

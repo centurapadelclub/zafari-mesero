@@ -68,10 +68,16 @@ export function PedidoCard({ pedido, items, modo, onPress, onSetEstado, busy }: 
               <Text style={styles.itemQty}>{it.cantidad}×</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName}>{it.nombre}</Text>
-                {it.modificadores ? <Text style={styles.itemMod}>{it.modificadores}</Text> : null}
-                {it.nota ? <Text style={styles.itemNota}>📝 {it.nota}</Text> : null}
+                {it.modificadores.map((m, j) => (
+                  <Text key={j} style={styles.itemMod}>
+                    + {m.nombre_opcion}
+                    {m.precio_extra ? ` (${money(m.precio_extra)})` : ''}
+                  </Text>
+                ))}
               </View>
-              {it.precio != null ? <Text style={styles.itemPrecio}>{money(it.precio)}</Text> : null}
+              {it.subtotal != null ? (
+                <Text style={styles.itemPrecio}>{money(it.subtotal)}</Text>
+              ) : null}
             </View>
           ))}
         </View>
