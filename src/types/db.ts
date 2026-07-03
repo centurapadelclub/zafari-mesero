@@ -124,7 +124,7 @@ export interface FeedItem {
 /** Rutas del stack raíz de navegación. */
 export type RootStackParamList = {
   Onboarding: undefined;
-  Tabs: undefined;
+  Tabs: { tab?: 'llamados' | 'pedidos'; openPedidoId?: Id } | undefined;
   Preferences: undefined;
   IncomingCall: { kind: FeedKind; id: Id; ubicacion: string; tipo?: string | null };
 };

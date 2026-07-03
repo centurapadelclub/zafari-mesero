@@ -3,6 +3,8 @@ import notifee, {
   AndroidImportance,
   Event,
   EventType,
+  TriggerType,
+  TimestampTrigger,
 } from '@notifee/react-native';
 import { RootStackParamList } from '../types/db';
 import { CHANNEL_HEADSUP, callChannelForPref, ensureChannels } from './notifications';
@@ -37,12 +39,11 @@ export function parseCallData(data?: Record<string, unknown> | null): CallData |
   };
 }
 
-/** Muestra la notificación de llamada entrante con Full Screen Intent. */
-export async function displayIncomingCall(call: CallData): Promise<void> {
-  await ensureChannels();
+/** Arma el objeto de notificación de "llamada entrante" (reutilizado por el
+ *  display inmediato y por el snooze programado). */
+async function buildIncomingCallNotification(call: CallData) {
   const channelId = await callChannelForPref();
-
-  await notifee.displayNotification({
+  return {
     title:
       call.kind === 'pedido' ? `Nuevo pedido — ${call.ubicacion}` : `Llamado — ${call.ubicacion}`,
     body: call.tipo ? `Tipo: ${call.tipo}` : 'Deslizá para atender',
@@ -58,7 +59,29 @@ export async function displayIncomingCall(call: CallData): Promise<void> {
       autoCancel: false,
       timeoutAfter: 30000, // se descarta sola a los 30 s si nadie atiende
     },
-  });
+  };
+}
+
+/** Muestra la notificación de llamada entrante con Full Screen Intent. */
+export async function displayIncomingCall(call: CallData): Promise<void> {
+  await ensureChannels();
+  await notifee.displayNotification(await buildIncomingCallNotification(call));
+}
+
+/**
+ * Snooze: programa una notificación IDÉNTICA a la llamada entrante para dentro
+ * de `ms` (por defecto 30 s). notifee la dispara de forma nativa aunque la app
+ * esté cerrada (TimestampTrigger con alarmManager), reabriendo la misma pantalla
+ * a pantalla completa si el mesero no atendió.
+ */
+export async function scheduleSnooze(call: CallData, ms = 30000): Promise<void> {
+  await ensureChannels();
+  const trigger: TimestampTrigger = {
+    type: TriggerType.TIMESTAMP,
+    timestamp: Date.now() + ms,
+    alarmManager: { allowWhileIdle: true }, // dispara aunque esté en Doze
+  };
+  await notifee.createTriggerNotification(await buildIncomingCallNotification(call), trigger);
 }
 
 /**

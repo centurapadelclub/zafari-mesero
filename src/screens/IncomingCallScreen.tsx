@@ -1,19 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import notifee from '@notifee/react-native';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SlideToAct } from '../components/SlideToAct';
 import { startCallVibration, stopCallVibration } from '../lib/notifications';
-import { getSoundPref } from '../lib/preferences';
+import { scheduleSnooze } from '../lib/incomingCall';
+import { getSoundPref, getTonePref, TonePref } from '../lib/preferences';
+import { money } from '../lib/money';
 import { LLAMADO_ATENDIDO, PEDIDO_ESTADO_AL_ATENDER, RootStackParamList } from '../types/db';
 
 const RINGTONE = require('../../assets/ringtone.wav');
 const LOGO = require('../../assets/logo-zafari.png');
 const GOLD = '#D4A017';
+
+/** Cada tono seleccionable mapea a un .wav en assets/. */
+const TONE_SOURCES: Record<TonePref, ReturnType<typeof require>> = {
+  suave: require('../../assets/notif-suave.wav'),
+  timbre: RINGTONE,
+  alarma: require('../../assets/alarma.wav'),
+};
+
+interface PedidoResumen {
+  cliente?: string | null;
+  telefono?: string | null;
+  total?: number | null;
+  items: { cantidad: number; nombre: string; subtotal?: number | null }[];
+}
 
 type IncomingRoute = RouteProp<RootStackParamList, 'IncomingCall'>;
 
@@ -23,14 +40,17 @@ type IncomingRoute = RouteProp<RootStackParamList, 'IncomingCall'>;
  * bloqueado / pantalla apagada).
  */
 export function IncomingCallScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<IncomingRoute>();
   const { session } = useAuth();
   const { kind, id, ubicacion, tipo } = params;
+  const esPedido = kind === 'pedido';
   const [busy, setBusy] = useState(false);
+  const [pedido, setPedido] = useState<PedidoResumen | null>(null);
 
   // Ringtone en loop mientras la pantalla esté visible (solo si la preferencia
-  // es 'sonido + vibración'). La vibración va siempre.
+  // es 'sonido + vibración'). La vibración va siempre. El tono depende de la
+  // preferencia guardada (suave / timbre / alarma).
   const player = useAudioPlayer(RINGTONE);
 
   useEffect(() => {
@@ -38,10 +58,11 @@ export function IncomingCallScreen() {
     startCallVibration();
     (async () => {
       try {
-        const pref = await getSoundPref();
+        const [pref, tono] = await Promise.all([getSoundPref(), getTonePref()]);
         if (cancelled || pref !== 'sound_vibration') return;
         // Sonar aunque el celular esté en silencio.
         await setAudioModeAsync({ playsInSilentMode: true });
+        player.replace(TONE_SOURCES[tono]); // aplica el tono elegido
         player.loop = true;
         player.play();
       } catch {
@@ -61,6 +82,38 @@ export function IncomingCallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Si es un PEDIDO, traemos el resumen (cliente, total, primeros items).
+  useEffect(() => {
+    if (!esPedido) return;
+    let cancelled = false;
+    (async () => {
+      const { data: ped } = await supabase
+        .from('pedidos')
+        .select('nombre_cliente, telefono_cliente, total')
+        .eq('id', id)
+        .maybeSingle();
+      const { data: items } = await supabase
+        .from('pedido_items')
+        .select('nombre_producto, cantidad, subtotal')
+        .eq('pedido_id', id)
+        .limit(4);
+      if (cancelled) return;
+      setPedido({
+        cliente: ped?.nombre_cliente ?? null,
+        telefono: ped?.telefono_cliente ?? null,
+        total: ped?.total ?? null,
+        items: (items ?? []).map((r) => ({
+          cantidad: Number(r.cantidad) || 1,
+          nombre: r.nombre_producto != null ? String(r.nombre_producto) : '(item)',
+          subtotal: r.subtotal != null ? Number(r.subtotal) : null,
+        })),
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [esPedido, id]);
+
   const stopRingtone = () => {
     try {
       player.pause();
@@ -74,7 +127,25 @@ export function IncomingCallScreen() {
     stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});
     if (navigation.canGoBack()) navigation.goBack();
-    else navigation.navigate('Tabs' as never);
+    else navigation.navigate('Tabs');
+  };
+
+  /** Snooze 30 s: reprograma la MISMA llamada y cierra la pantalla. */
+  const onSnooze = async () => {
+    try {
+      await scheduleSnooze({ kind, id: String(id), ubicacion, tipo });
+    } catch {
+      // si no se pudo programar, igual cerramos
+    }
+    cerrar();
+  };
+
+  /** "Ver pedido": cierra y abre el detalle de ese pedido en la pestaña Pedidos. */
+  const verPedido = () => {
+    stopCallVibration();
+    stopRingtone();
+    notifee.cancelAllNotifications().catch(() => {});
+    navigation.navigate('Tabs', { tab: 'pedidos', openPedidoId: id });
   };
 
   const onAtender = async () => {
@@ -115,32 +186,76 @@ export function IncomingCallScreen() {
           <Text style={styles.submarca}>RESTAURANTE BAR</Text>
 
           <View style={styles.badge}>
-            <Text style={styles.badgeIcon}>📞</Text>
+            <Text style={styles.badgeIcon}>{esPedido ? '📝' : '📞'}</Text>
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
           <Text style={styles.subtitulo}>{subtitulo}</Text>
         </View>
 
-        {/* Centro: círculo con resplandor + ubicación */}
-        <View style={styles.middle}>
-          <View style={styles.glow}>
-            <View style={styles.circle}>
-              <Text style={styles.circleIcon}>{icono}</Text>
+        {/* Centro */}
+        {esPedido ? (
+          <View style={styles.middle}>
+            <Text style={styles.label}>Nuevo pedido en</Text>
+            <Text style={styles.ubicacion}>{ubicacion}</Text>
+            <View style={styles.divider} />
+
+            <View style={styles.pedidoCard}>
+              {pedido?.cliente ? (
+                <Text style={styles.pedidoCliente}>👤 {pedido.cliente}</Text>
+              ) : null}
+              {pedido?.items.length ? (
+                pedido.items.map((it, i) => (
+                  <View key={i} style={styles.pedidoItemRow}>
+                    <Text style={styles.pedidoItem}>
+                      <Text style={styles.pedidoQty}>{it.cantidad}x </Text>
+                      {it.nombre}
+                    </Text>
+                    {it.subtotal != null ? (
+                      <Text style={styles.pedidoItemPrecio}>{money(it.subtotal)}</Text>
+                    ) : null}
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.pedidoDim}>Cargando detalle…</Text>
+              )}
+              {pedido?.total != null ? (
+                <View style={styles.pedidoTotalRow}>
+                  <Text style={styles.pedidoTotalLabel}>TOTAL</Text>
+                  <Text style={styles.pedidoTotalValue}>{money(pedido.total)}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
+        ) : (
+          <View style={styles.middle}>
+            <View style={styles.glow}>
+              <View style={styles.circle}>
+                <Text style={styles.circleIcon}>{icono}</Text>
+              </View>
+            </View>
 
-          <Text style={styles.label}>Te llaman de</Text>
-          <Text style={styles.ubicacion}>{ubicacion}</Text>
-          <View style={styles.divider} />
-        </View>
+            <Text style={styles.label}>Te llaman de</Text>
+            <Text style={styles.ubicacion}>{ubicacion}</Text>
+            <View style={styles.divider} />
+          </View>
+        )}
 
-        {/* Abajo: deslizable */}
+        {/* Abajo: acciones */}
         <View style={styles.bottom}>
           {busy ? (
             <ActivityIndicator color={GOLD} size="large" />
+          ) : esPedido ? (
+            <>
+              <Pressable style={styles.verPedidoBtn} onPress={verPedido}>
+                <Text style={styles.verPedidoText}>Ver pedido ▶</Text>
+              </Pressable>
+              <Pressable style={styles.snoozeBtn} onPress={onSnooze}>
+                <Text style={styles.snoozeText}>⏰ Snooze 30s</Text>
+              </Pressable>
+            </>
           ) : (
             <>
-              <SlideToAct onAtender={onAtender} onIgnorar={cerrar} />
+              <SlideToAct onAtender={onAtender} onSnooze={onSnooze} />
               <Text style={styles.hintIcon}>👆</Text>
               <Text style={styles.hint}>‹‹  Deslizá el botón para atender  ››</Text>
             </>
@@ -242,7 +357,53 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   divider: { width: 200, height: 2, backgroundColor: GOLD, borderRadius: 1, marginTop: 14, opacity: 0.9 },
-  bottom: { alignItems: 'center' },
+  bottom: { alignItems: 'center', alignSelf: 'stretch' },
   hintIcon: { fontSize: 20, marginTop: 16 },
   hint: { color: 'rgba(255,255,255,0.65)', fontSize: 14, marginTop: 6, letterSpacing: 0.5 },
+  // --- Resumen de pedido ---
+  pedidoCard: {
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,160,23,0.4)',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 18,
+    gap: 8,
+  },
+  pedidoCliente: { color: 'rgba(255,255,255,0.9)', fontSize: 15, marginBottom: 2 },
+  pedidoItemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  pedidoItem: { color: '#fff', fontSize: 15, flex: 1 },
+  pedidoQty: { color: GOLD, fontWeight: '900' },
+  pedidoItemPrecio: { color: GOLD, fontSize: 15, fontWeight: '700' },
+  pedidoDim: { color: 'rgba(255,255,255,0.6)', fontSize: 14, paddingVertical: 8, textAlign: 'center' },
+  pedidoTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.12)',
+    paddingTop: 10,
+    marginTop: 4,
+  },
+  pedidoTotalLabel: { color: GOLD, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  pedidoTotalValue: { color: GOLD, fontSize: 20, fontWeight: '900' },
+  verPedidoBtn: {
+    alignSelf: 'stretch',
+    backgroundColor: '#1E7A3D',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  verPedidoText: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  snoozeBtn: {
+    alignSelf: 'stretch',
+    borderWidth: 1.5,
+    borderColor: GOLD,
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  snoozeText: { color: GOLD, fontSize: 16, fontWeight: '800' },
 });

@@ -8,7 +8,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type SoundPref = 'sound_vibration' | 'vibration_only';
 
+/** Tono de la llamada entrante (Esc2). Cada valor mapea a un .wav en assets/. */
+export type TonePref = 'suave' | 'timbre' | 'alarma';
+
 const KEY_SOUND = 'zafari.pref.sound';
+const KEY_TONE = 'zafari.pref.tone';
 const KEY_ONBOARDING = 'zafari.pref.onboardingDone';
 
 export async function getSoundPref(): Promise<SoundPref> {
@@ -18,6 +22,17 @@ export async function getSoundPref(): Promise<SoundPref> {
 
 export async function setSoundPref(pref: SoundPref): Promise<void> {
   await AsyncStorage.setItem(KEY_SOUND, pref);
+}
+
+const TONES: TonePref[] = ['suave', 'timbre', 'alarma'];
+
+export async function getTonePref(): Promise<TonePref> {
+  const v = await AsyncStorage.getItem(KEY_TONE);
+  return TONES.includes(v as TonePref) ? (v as TonePref) : 'timbre'; // default: timbre
+}
+
+export async function setTonePref(pref: TonePref): Promise<void> {
+  await AsyncStorage.setItem(KEY_TONE, pref);
 }
 
 export async function isOnboardingDone(): Promise<boolean> {

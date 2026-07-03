@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { usePedidos } from '../hooks/usePedidos';
 import { useLlamados } from '../hooks/useLlamados';
@@ -21,7 +22,7 @@ import { PulsoFooter } from '../components/PulsoFooter';
 import { colors } from '../theme';
 import { requestNotificationPermissions, peekFcmToken } from '../lib/notifications';
 import { getPushDiag, subscribePushDiag } from '../lib/pushDiag';
-import { Id, Pedido, PedidoItem } from '../types/db';
+import { Id, Pedido, PedidoItem, RootStackParamList } from '../types/db';
 
 type Tab = 'llamados' | 'pedidos';
 
@@ -37,6 +38,7 @@ function Badge({ n }: { n: number }) {
 export function PanelScreen() {
   const { session, signOut } = useAuth();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<RootStackParamList, 'Tabs'>>();
   const insets = useSafeAreaInsets();
   const zonas = session?.zonas ?? [];
   const meseroId = session?.id ?? '';
@@ -62,6 +64,44 @@ export function PanelScreen() {
 
   // Diagnóstico visible del registro del token en push_tokens.
   useEffect(() => subscribePushDiag(setPushDiagState), []);
+
+  // Deep-link desde la pantalla de pedido entrante ("Ver pedido"): cambia a la
+  // pestaña Pedidos y abre el detalle de ese pedido específico.
+  const paramTab = route.params?.tab;
+  const paramPedidoId = route.params?.openPedidoId;
+  useEffect(() => {
+    if (paramTab) setTab(paramTab);
+    if (paramPedidoId == null) return;
+    let cancelled = false;
+    (async () => {
+      // Buscar el pedido entre los ya cargados; si no está, traerlo directo.
+      let p =
+        [...pedidos.activos, ...pedidos.historial].find(
+          (x) => String(x.id) === String(paramPedidoId),
+        ) ?? null;
+      if (!p) {
+        const { data } = await supabase
+          .from('pedidos')
+          .select('*')
+          .eq('id', paramPedidoId)
+          .maybeSingle();
+        p = (data as Pedido) ?? null;
+      }
+      if (cancelled || !p) return;
+      // Asegurar que sus items estén disponibles para el modal.
+      if (!itemsMap[String(p.id)]) {
+        const items = await pedidos.fetchPedidoItems(p.id);
+        if (!cancelled) setItemsMap((prev) => ({ ...prev, [String(p!.id)]: items }));
+      }
+      if (!cancelled) setDetalle(p);
+      // Limpiar el param para no reabrir el modal al re-renderizar.
+      navigation.setParams({ openPedidoId: undefined } as never);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramTab, paramPedidoId]);
 
   // Traer items de todos los pedidos visibles (activos + historial).
   const pedidoIdsKey = useMemo(

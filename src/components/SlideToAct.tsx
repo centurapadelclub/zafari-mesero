@@ -3,7 +3,7 @@ import { Animated, PanResponder, StyleSheet, Text, View } from 'react-native';
 
 interface Props {
   onAtender: () => void;
-  onIgnorar: () => void;
+  onSnooze: () => void;
 }
 
 const GOLD = '#D4A017';
@@ -17,10 +17,10 @@ const KNOB_LEFT = (TRACK_WIDTH - KNOB) / 2;
  * Botón deslizable estilo "llamada entrante" (referencia Zafari):
  *  - pista bicolor: rojo (IGNORAR) a la izquierda, verde (ATENDER) a la derecha
  *  - perilla blanca central con borde dorado e ícono de menú (☰)
- *  - deslizar a la DERECHA → onAtender ; a la IZQUIERDA → onIgnorar
+ *  - deslizar a la DERECHA → onAtender ; a la IZQUIERDA → onSnooze
  * Si no se supera el umbral, la perilla vuelve al centro.
  */
-export function SlideToAct({ onAtender, onIgnorar }: Props) {
+export function SlideToAct({ onAtender, onSnooze }: Props) {
   const x = useRef(new Animated.Value(0)).current;
   const fired = useRef(false);
 
@@ -45,7 +45,7 @@ export function SlideToAct({ onAtender, onIgnorar }: Props) {
         } else if (g.dx <= -THRESHOLD) {
           fired.current = true;
           Animated.timing(x, { toValue: -MAX, duration: 120, useNativeDriver: true }).start(() =>
-            onIgnorar(),
+            onSnooze(),
           );
         } else {
           springBack();
@@ -59,8 +59,8 @@ export function SlideToAct({ onAtender, onIgnorar }: Props) {
     <View style={styles.wrap}>
       <View style={styles.pill}>
         <View style={styles.left}>
-          <Text style={styles.hangup}>📞</Text>
-          <Text style={styles.label}>IGNORAR</Text>
+          <Text style={styles.snoozeIcon}>⏰</Text>
+          <Text style={styles.label}>SNOOZE</Text>
         </View>
         <View style={styles.right}>
           <Text style={styles.label}>ATENDER</Text>
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   label: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
-  hangup: { fontSize: 20, transform: [{ rotate: '135deg' }] },
+  snoozeIcon: { fontSize: 20 },
   play: { color: '#7CE29A', fontSize: 18 },
   knob: {
     position: 'absolute',
