@@ -1,12 +1,17 @@
 const { withAndroidManifest } = require('@expo/config-plugins');
 
 /**
- * Config plugin: habilita que la app se muestre a pantalla completa sobre la
- * pantalla de bloqueo cuando llega una llamada entrante (Escenario 2).
+ * Config plugin: se asegura de que la MainActivity NO tenga showWhenLocked ni
+ * turnScreenOn de forma ESTÁTICA.
  *
- * Marca la MainActivity con showWhenLocked + turnScreenOn. El permiso
- * SYSTEM_ALERT_WINDOW y USE_FULL_SCREEN_INTENT se declaran en app.config.ts
- * (sección android.permissions).
+ * Antes marcábamos esos atributos estáticos y la app quedaba SIEMPRE visible
+ * sobre la pantalla de bloqueo. Ahora ese comportamiento se activa/desactiva de
+ * forma DINÁMICA (módulo nativo local `LockScreen`) solo mientras se muestra la
+ * pantalla de llamada entrante (Esc2). Este plugin queda como salvaguarda: si el
+ * template base agregara esos atributos, los removemos.
+ *
+ * Los permisos USE_FULL_SCREEN_INTENT / SYSTEM_ALERT_WINDOW se declaran en
+ * app.config.ts (sección android.permissions).
  */
 module.exports = function withFullScreenIntent(config) {
   return withAndroidManifest(config, (cfg) => {
@@ -14,12 +19,10 @@ module.exports = function withFullScreenIntent(config) {
     if (!application) return cfg;
 
     const activities = application.activity ?? [];
-    const main = activities.find(
-      (a) => a.$?.['android:name'] === '.MainActivity',
-    );
-    if (main) {
-      main.$['android:showWhenLocked'] = 'true';
-      main.$['android:turnScreenOn'] = 'true';
+    const main = activities.find((a) => a.$?.['android:name'] === '.MainActivity');
+    if (main && main.$) {
+      delete main.$['android:showWhenLocked'];
+      delete main.$['android:turnScreenOn'];
     }
     return cfg;
   });

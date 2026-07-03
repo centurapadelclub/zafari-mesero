@@ -51,6 +51,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.USE_FULL_SCREEN_INTENT', // Esc2: pantalla completa con el celular bloqueado
       'android.permission.SYSTEM_ALERT_WINDOW', // Esc2: mostrar sobre otras apps
       'android.permission.RECEIVE_BOOT_COMPLETED',
+      'android.permission.SCHEDULE_EXACT_ALARM', // Snooze: reprogramar la llamada exactamente a los 30 s
     ],
   },
   web: {

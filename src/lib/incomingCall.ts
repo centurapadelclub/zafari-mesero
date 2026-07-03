@@ -1,6 +1,7 @@
 import notifee, {
   AndroidCategory,
   AndroidImportance,
+  AlarmType,
   Event,
   EventType,
   TriggerType,
@@ -79,7 +80,9 @@ export async function scheduleSnooze(call: CallData, ms = 30000): Promise<void> 
   const trigger: TimestampTrigger = {
     type: TriggerType.TIMESTAMP,
     timestamp: Date.now() + ms,
-    alarmManager: { allowWhileIdle: true }, // dispara aunque esté en Doze
+    // Alarma EXACTA aunque el sistema esté en Doze (requiere el permiso
+    // SCHEDULE_EXACT_ALARM declarado en app.config.ts).
+    alarmManager: { type: AlarmType.SET_EXACT_AND_ALLOW_WHILE_IDLE },
   };
   await notifee.createTriggerNotification(await buildIncomingCallNotification(call), trigger);
 }

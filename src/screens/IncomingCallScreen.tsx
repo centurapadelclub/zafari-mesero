@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { SlideToAct } from '../components/SlideToAct';
 import { startCallVibration, stopCallVibration } from '../lib/notifications';
 import { scheduleSnooze } from '../lib/incomingCall';
+import { setShowWhenLocked } from '../../modules/lock-screen';
 import { getSoundPref, getTonePref, TonePref } from '../lib/preferences';
 import { money } from '../lib/money';
 import { LLAMADO_ATENDIDO, PEDIDO_ESTADO_AL_ATENDER, RootStackParamList } from '../types/db';
@@ -56,6 +57,8 @@ export function IncomingCallScreen() {
   useEffect(() => {
     let cancelled = false;
     startCallVibration();
+    // SOLO durante esta pantalla: mostrar sobre el bloqueo + encender pantalla.
+    setShowWhenLocked(true);
     (async () => {
       try {
         const [pref, tono] = await Promise.all([getSoundPref(), getTonePref()]);
@@ -73,6 +76,8 @@ export function IncomingCallScreen() {
     return () => {
       cancelled = true;
       stopCallVibration();
+      // Restaurar comportamiento normal: la app vuelve a respetar el bloqueo.
+      setShowWhenLocked(false);
       try {
         player.pause();
       } catch {

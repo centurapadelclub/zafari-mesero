@@ -1,0 +1,16 @@
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+
+group = 'expo.modules.lockscreen'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.lockscreen"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
