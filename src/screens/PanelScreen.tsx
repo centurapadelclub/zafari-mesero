@@ -1,171 +1,235 @@
-import React, { useEffect, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { useFeed, ConnStatus } from '../hooks/useFeed';
-import { FeedCard } from '../components/FeedCard';
-import { FeedItem, Id } from '../types/db';
+import { usePedidos } from '../hooks/usePedidos';
+import { useLlamados } from '../hooks/useLlamados';
+import { PedidoCard } from '../components/PedidoCard';
+import { PedidoDetalleModal } from '../components/PedidoDetalleModal';
+import { LlamadoActivoCard, LlamadoHistorialCard } from '../components/LlamadoCards';
+import { PulsoFooter } from '../components/PulsoFooter';
+import { colors } from '../theme';
 import { requestNotificationPermissions } from '../lib/notifications';
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { Id, Pedido, PedidoItem } from '../types/db';
 
-const CONN_UI: Record<ConnStatus, { color: string; label: string }> = {
-  connected: { color: '#2E7D32', label: 'Conectado' },
-  connecting: { color: '#F57C00', label: 'Conectando…' },
-  error: { color: '#D32F2F', label: 'Sin conexión' },
-};
+type Tab = 'pedidos' | 'llamados';
+type Sub = 'activos' | 'historial';
+
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  big,
+}: {
+  value: T;
+  options: { key: T; label: string; badge?: number }[];
+  onChange: (v: T) => void;
+  big?: boolean;
+}) {
+  return (
+    <View style={[styles.seg, big && styles.segBig]}>
+      {options.map((o) => {
+        const active = o.key === value;
+        return (
+          <Pressable
+            key={o.key}
+            style={[styles.segItem, active && styles.segItemActive]}
+            onPress={() => onChange(o.key)}
+          >
+            <Text style={[styles.segText, big && styles.segTextBig, active && styles.segTextActive]}>
+              {o.label}
+              {o.badge ? `  ${o.badge}` : ''}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 export function PanelScreen() {
   const { session } = useAuth();
   const zonas = session?.zonas ?? [];
-  const { items, loading, error, realtimeStatus, refetch, markAtendido } = useFeed(
-    zonas,
-    session?.id ?? '',
-  );
-  const [busyId, setBusyId] = useState<Id | null>(null);
-  const conn = CONN_UI[realtimeStatus];
+  const meseroId = session?.id ?? '';
 
-  // Asegurar permisos y canales de notificación al entrar al panel.
-  // La vibración/alerta ya no se maneja acá: la definen los escenarios de
-  // notificación (Esc2 llamada entrante / Esc3 heads-up).
+  const pedidos = usePedidos(zonas, meseroId);
+  const llamados = useLlamados(zonas, meseroId);
+
+  const [tab, setTab] = useState<Tab>('pedidos');
+  const [sub, setSub] = useState<Sub>('activos');
+  const [busyId, setBusyId] = useState<Id | null>(null);
+
+  // Items de los pedidos visibles (para mostrar el detalle en las tarjetas).
+  const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
+  const [detalle, setDetalle] = useState<Pedido | null>(null);
+
   useEffect(() => {
     requestNotificationPermissions();
   }, []);
 
-  // ---- DEBUG TEMPORAL: cadena completa mesero → asignaciones → zonas ----
-  // Replica en pantalla exactamente lo que hace resolveZonasForMesero, paso a
-  // paso, para ver dónde se corta. Quitar cuando se confirme.
-  const [zonasRaw, setZonasRaw] = useState<string>('cargando…');
+  // Traer items de todos los pedidos visibles (activos + historial).
+  const pedidoIdsKey = useMemo(
+    () => [...pedidos.activos, ...pedidos.historial].map((p) => p.id).join(','),
+    [pedidos.activos, pedidos.historial],
+  );
   useEffect(() => {
-    (async () => {
-      const mid = session?.id;
-      let o = `mesero_id=${JSON.stringify(mid)} (${typeof mid})\n`;
-      o += `session.zonas=${JSON.stringify(session?.zonas ?? [])}\n`;
-      try {
-        const asig = await supabase.from('asignaciones').select('*').eq('mesero_id', mid ?? '');
-        o += `[1] asignaciones err=${asig.error ? asig.error.message : 'ok'}\n`;
-        o += `    raw=${JSON.stringify(asig.data)}\n`;
-        const zonaIds = (asig.data ?? [])
-          .map((a: { zona_id?: unknown }) => a.zona_id)
-          .filter((v) => v != null);
-        o += `[2] zonaIds=${JSON.stringify(zonaIds)}\n`;
-        if (zonaIds.length) {
-          const z = await supabase
-            .from('zonas')
-            .select('*')
-            .in('id', zonaIds as (string | number)[]);
-          o += `[3] zonas err=${z.error ? z.error.message : 'ok'}\n`;
-          o += `    raw=${JSON.stringify(z.data)}\n`;
-          o += `[4] columnas=${z.data && z.data[0] ? JSON.stringify(Object.keys(z.data[0])) : '[]'}\n`;
-        } else {
-          o += `[3] (sin zonaIds → no se consulta zonas)\n`;
-        }
-      } catch (err) {
-        o += `EXCEPTION: ${String(err)}\n`;
-      }
-      // eslint-disable-next-line no-console
-      console.log('[dbgZonas]\n' + o);
-      setZonasRaw(o);
-    })();
-  }, [session?.id]);
+    const ids = [...pedidos.activos, ...pedidos.historial].map((p) => p.id);
+    if (!ids.length) {
+      setItemsMap({});
+      return;
+    }
+    let cancelled = false;
+    pedidos.fetchItemsForPedidos(ids).then((m) => {
+      if (!cancelled) setItemsMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoIdsKey]);
 
-  const onAtendido = async (item: FeedItem) => {
-    setBusyId(item.id);
-    await markAtendido(item);
+  const onSetEstado = async (id: Id, estado: string) => {
+    setBusyId(id);
+    await pedidos.setEstadoPedido(id, estado);
+    setBusyId(null);
+  };
+  const onAtender = async (id: Id) => {
+    setBusyId(id);
+    await llamados.atender(id);
+    setBusyId(null);
+  };
+  const onCancelar = async (id: Id) => {
+    setBusyId(id);
+    await llamados.cancelarAtendido(id);
     setBusyId(null);
   };
 
+  // ---- Datos y render según pestaña ----
+  const { data, renderItem, refreshing, onRefresh, emptyText } = useMemo(() => {
+    if (tab === 'pedidos') {
+      const list = sub === 'activos' ? pedidos.activos : pedidos.historial;
+      return {
+        data: list as unknown[],
+        refreshing: pedidos.loading,
+        onRefresh: pedidos.refetch,
+        emptyText: sub === 'activos' ? 'No hay pedidos activos' : 'Sin pedidos entregados hoy',
+        renderItem: ({ item }: { item: unknown }) => {
+          const p = item as Pedido;
+          return (
+            <PedidoCard
+              pedido={p}
+              items={itemsMap[String(p.id)]}
+              modo={sub === 'activos' ? 'activo' : 'historial'}
+              onPress={() => setDetalle(p)}
+              onSetEstado={onSetEstado}
+              busy={busyId === p.id}
+            />
+          );
+        },
+      };
+    }
+    // llamados
+    const list = sub === 'activos' ? llamados.activos : llamados.historial;
+    return {
+      data: list as unknown[],
+      refreshing: llamados.loading,
+      onRefresh: async () => {},
+      emptyText: sub === 'activos' ? 'No hay llamados activos' : 'Sin llamados atendidos hoy',
+      renderItem: ({ item }: { item: unknown }) =>
+        sub === 'activos' ? (
+          <LlamadoActivoCard
+            llamado={item as never}
+            onAtender={onAtender}
+            busy={busyId === (item as Pedido).id}
+          />
+        ) : (
+          <LlamadoHistorialCard
+            llamado={item as never}
+            onCancelar={onCancelar}
+            busy={busyId === (item as Pedido).id}
+          />
+        ),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, sub, pedidos, llamados, itemsMap, busyId]);
+
+  const error = pedidos.error ?? llamados.error;
+
   return (
     <View style={styles.container}>
-      <View style={styles.headerInfo}>
-        <View style={styles.headerTop}>
-          <Text style={styles.hola}>Hola, {session?.nombre}</Text>
-          <View style={styles.connChip}>
-            <View style={[styles.dot, { backgroundColor: conn.color }]} />
-            <Text style={[styles.connText, { color: conn.color }]}>{conn.label}</Text>
-          </View>
-        </View>
-        <Text style={styles.zonas}>
-          {zonas.length ? `Zonas: ${zonas.join(', ')}` : '⚠️ Sin zonas asignadas'}
-        </Text>
-      </View>
+      <Segmented<Tab>
+        big
+        value={tab}
+        onChange={(v) => setTab(v)}
+        options={[
+          { key: 'pedidos', label: 'PEDIDOS', badge: pedidos.activos.length || undefined },
+          { key: 'llamados', label: 'LLAMADOS', badge: llamados.activos.length || undefined },
+        ]}
+      />
+      <Segmented<Sub>
+        value={sub}
+        onChange={(v) => setSub(v)}
+        options={[
+          { key: 'activos', label: 'Activos' },
+          { key: 'historial', label: 'Historial' },
+        ]}
+      />
 
-      {!isSupabaseConfigured ? (
-        <Text style={styles.error}>
-          ⚠️ Faltan las credenciales de Supabase en el build (EXPO_PUBLIC_*).
-        </Text>
+      {!zonas.length ? (
+        <Text style={styles.warn}>⚠️ Sin zonas asignadas</Text>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {/* DEBUG TEMPORAL — cadena mesero→asignaciones→zonas (quitar luego) */}
-      <ScrollView style={styles.debugBox} nestedScrollEnabled>
-        <Text style={styles.debugTitle}>🔧 DEBUG zonas</Text>
-        <Text style={styles.debugText}>
-          session.zonas EN VIVO = {JSON.stringify(session?.zonas ?? [])}
-        </Text>
-        <Text style={styles.debugText}>{zonasRaw}</Text>
-      </ScrollView>
-
       <FlatList
-        data={items}
-        keyExtractor={(i) => `${i.kind}-${i.id}`}
+        data={data}
+        keyExtractor={(item, i) => `${(item as Pedido).id ?? i}`}
+        renderItem={renderItem}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <FeedCard item={item} onAtendido={onAtendido} busy={busyId === item.id} />
-        )}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={refetch} />}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>✓</Text>
-              <Text style={styles.emptyText}>No hay llamados pendientes</Text>
-              <Text style={styles.emptySub}>Te avisamos apenas llegue uno</Text>
-            </View>
-          ) : null
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
         }
+        ListEmptyComponent={
+          !refreshing ? <Text style={styles.empty}>{emptyText}</Text> : null
+        }
+      />
+
+      <PulsoFooter />
+
+      <PedidoDetalleModal
+        pedido={detalle}
+        items={detalle ? itemsMap[String(detalle.id)] ?? [] : []}
+        loading={false}
+        onClose={() => setDetalle(null)}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f5f7' },
-  headerInfo: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  hola: { fontSize: 20, fontWeight: '800', color: '#1a1a1a' },
-  connChip: {
+  container: { flex: 1, backgroundColor: colors.bg },
+  seg: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    elevation: 1,
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: colors.bgCard,
+    borderRadius: 12,
+    padding: 4,
   },
-  dot: { width: 9, height: 9, borderRadius: 5 },
-  connText: { fontSize: 12, fontWeight: '800' },
-  zonas: { fontSize: 14, color: '#777', marginTop: 2 },
+  segBig: { marginTop: 12 },
+  segItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
+  segItemActive: { backgroundColor: colors.gold },
+  segText: { color: colors.textDim, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
+  segTextBig: { fontSize: 15 },
+  segTextActive: { color: '#000' },
+  warn: { color: colors.amber, textAlign: 'center', marginTop: 10, fontWeight: '700' },
   error: {
     color: '#fff',
-    backgroundColor: '#D32F2F',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: colors.red,
     marginHorizontal: 16,
+    marginTop: 10,
+    padding: 8,
     borderRadius: 8,
     fontWeight: '600',
   },
-  debugBox: {
-    maxHeight: 170,
-    marginHorizontal: 16,
-    marginTop: 8,
-    backgroundColor: '#111',
-    borderRadius: 8,
-    padding: 10,
-  },
-  debugTitle: { color: '#ffb300', fontSize: 11, fontWeight: '800', marginBottom: 4 },
-  debugText: { color: '#8ef', fontSize: 11, fontFamily: 'monospace' },
   list: { padding: 16, flexGrow: 1 },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyEmoji: { fontSize: 48, color: '#2E7D32' },
-  emptyText: { fontSize: 18, fontWeight: '700', color: '#444', marginTop: 12 },
-  emptySub: { fontSize: 14, color: '#999', marginTop: 4 },
+  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 60, fontSize: 15 },
 });

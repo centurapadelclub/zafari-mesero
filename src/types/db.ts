@@ -68,6 +68,7 @@ export interface Llamado {
 /** Tabla: pedidos (atendido_at y mesero_id se agregan con la migración SQL) */
 export interface Pedido {
   id: Id;
+  numero?: string | number | null; // "número de pedido" si la tabla lo tiene; si no, usamos id
   ubicacion: string;
   estado: string;
   nombre_cliente?: string | null;
@@ -76,6 +77,28 @@ export interface Pedido {
   created_at: string;
   atendido_at?: string | null;
   mesero_id?: Id | null;
+}
+
+/**
+ * ⚠️ ESQUEMA ASUMIDO — items/detalle de un pedido.
+ * La tabla `pedidos` no trae el detalle de lo pedido, así que asumo una tabla
+ * aparte. Ajustá PEDIDO_ITEMS_TABLE y los campos según tu esquema real.
+ *
+ * Tabla asumida: `pedido_items`
+ *   pedido_id (FK a pedidos.id), nombre (producto), cantidad, precio,
+ *   modificadores (texto), nota (texto).
+ * La extracción prueba varios nombres de columna (ver usePedidos.itemNombre).
+ */
+export const PEDIDO_ITEMS_TABLE = 'pedido_items';
+
+export interface PedidoItem {
+  id?: Id;
+  pedido_id: Id;
+  nombre: string; // nombre del producto
+  cantidad: number;
+  precio?: number | null;
+  modificadores?: string | null;
+  nota?: string | null;
 }
 
 /** Item unificado para mostrar llamados y pedidos en la misma lista. */

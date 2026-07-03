@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { NavigationContainer, useNavigation, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import notifee from '@notifee/react-native';
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { PanelScreen } from '../screens/PanelScreen';
-import { HistorialScreen } from '../screens/HistorialScreen';
 import { PreferencesScreen } from '../screens/PreferencesScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
@@ -15,21 +13,18 @@ import { RootStackParamList } from '../types/db';
 import { isOnboardingDone } from '../lib/preferences';
 import { navigationRef, navigateToIncomingCall } from './navigationRef';
 import { callToRoute, parseCallData } from '../lib/incomingCall';
+import { colors } from '../theme';
 
-const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function LogoutButton() {
-  const { signOut } = useAuth();
-  return (
-    <Pressable onPress={() => signOut()} style={styles.headerBtn} hitSlop={8}>
-      <Text style={styles.headerText}>Salir</Text>
-    </Pressable>
-  );
-}
+const navTheme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: colors.bg },
+};
 
 function PanelHeaderRight() {
   const navigation = useNavigation();
+  const { signOut } = useAuth();
   return (
     <View style={styles.headerRight}>
       <Pressable
@@ -39,44 +34,10 @@ function PanelHeaderRight() {
       >
         <Text style={styles.gear}>⚙️</Text>
       </Pressable>
-      <LogoutButton />
+      <Pressable onPress={() => signOut()} style={styles.headerBtn} hitSlop={8}>
+        <Text style={styles.headerText}>Salir</Text>
+      </Pressable>
     </View>
-  );
-}
-
-function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
-  return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
-}
-
-function MeseroTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: '#D32F2F' },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '800' },
-        tabBarActiveTintColor: '#D32F2F',
-      }}
-    >
-      <Tab.Screen
-        name="Panel"
-        component={PanelScreen}
-        options={{
-          title: 'Panel',
-          headerRight: () => <PanelHeaderRight />,
-          tabBarIcon: ({ focused }) => <TabIcon emoji="🔔" focused={focused} />,
-        }}
-      />
-      <Tab.Screen
-        name="Historial"
-        component={HistorialScreen}
-        options={{
-          title: 'Historial',
-          headerRight: () => <LogoutButton />,
-          tabBarIcon: ({ focused }) => <TabIcon emoji="📋" focused={focused} />,
-        }}
-      />
-    </Tab.Navigator>
   );
 }
 
@@ -85,13 +46,18 @@ function AppStack({ onboardingDone }: { onboardingDone: boolean }) {
     <Stack.Navigator
       initialRouteName={onboardingDone ? 'Tabs' : 'Onboarding'}
       screenOptions={{
-        headerStyle: { backgroundColor: '#D32F2F' },
-        headerTintColor: '#fff',
-        headerTitleStyle: { fontWeight: '800' },
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.gold,
+        headerTitleStyle: { fontWeight: '900', color: colors.gold },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     >
       <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Tabs" component={MeseroTabs} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="Tabs"
+        component={PanelScreen}
+        options={{ title: 'Zafari · Mesero', headerRight: () => <PanelHeaderRight /> }}
+      />
       <Stack.Screen name="Preferences" component={PreferencesScreen} options={{ title: 'Preferencias' }} />
       <Stack.Screen
         name="IncomingCall"
@@ -121,22 +87,22 @@ export function RootNavigator() {
   if (loading || (session && onboardingDone === null)) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#D32F2F" />
+        <ActivityIndicator size="large" color={colors.gold} />
       </View>
     );
   }
 
   return (
-    <NavigationContainer ref={navigationRef} onReady={onReady}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={onReady}>
       {session ? <AppStack onboardingDone={!!onboardingDone} /> : <LoginScreen />}
     </NavigationContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  headerBtn: { marginRight: 14, paddingVertical: 4, paddingHorizontal: 6 },
-  headerText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  headerBtn: { marginLeft: 14, paddingVertical: 4, paddingHorizontal: 6 },
+  headerText: { color: colors.gold, fontWeight: '800', fontSize: 15 },
   gear: { fontSize: 18 },
 });
