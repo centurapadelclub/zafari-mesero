@@ -9,6 +9,7 @@ import messaging from '@react-native-firebase/messaging';
 import { supabase } from './supabase';
 import { Id } from '../types/db';
 import { getSoundPref } from './preferences';
+import { setPushDiag } from './pushDiag';
 
 /**
  * Notificaciones de la app del mesero — 3 escenarios (ver README):
@@ -131,14 +132,36 @@ export async function peekFcmToken(): Promise<string | null> {
 export async function savePushToken(meseroId: Id): Promise<void> {
   try {
     const token = await getFcmDeviceToken();
-    if (!token) return;
-    const { error } = await supabase.from('push_tokens').upsert(
-      { mesero_id: meseroId, token, platform: Platform.OS, updated_at: new Date().toISOString() },
-      { onConflict: 'token' },
-    );
-    if (error) console.warn('[notifications] No se pudo guardar el token:', error.message);
+    if (!token) {
+      setPushDiag(`push_tokens: sin token FCM (mesero_id=${meseroId})`);
+      return;
+    }
+    const tok10 = token.slice(0, 10);
+    // .select() para saber cuántas filas escribió realmente (y forzar el error
+    // de RLS/tipo si lo hay). Mostramos el resultado exacto en el panel.
+    const { data, error } = await supabase
+      .from('push_tokens')
+      .upsert(
+        { mesero_id: meseroId, token, platform: Platform.OS, updated_at: new Date().toISOString() },
+        { onConflict: 'token' },
+      )
+      .select('id');
+    if (error) {
+      console.warn('[notifications] No se pudo guardar el token:', error.message);
+      setPushDiag(
+        `push_tokens ✗ ERROR\nmesero_id=${meseroId}\ntoken=${tok10}…\nmsg: ${error.message}` +
+          (error.details ? `\ndetails: ${error.details}` : '') +
+          (error.hint ? `\nhint: ${error.hint}` : '') +
+          (error.code ? `\ncode: ${error.code}` : ''),
+      );
+    } else {
+      setPushDiag(
+        `push_tokens ✓ OK\nmesero_id=${meseroId}\ntoken=${tok10}…\nfilas=${data?.length ?? 0}`,
+      );
+    }
   } catch (err) {
     console.warn('[notifications] Error registrando token:', err);
+    setPushDiag(`push_tokens ✗ EXCEPCIÓN (mesero_id=${meseroId})\n${String(err)}`);
   }
 }
 

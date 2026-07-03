@@ -20,6 +20,7 @@ import { NotificacionesBanner } from '../components/NotificacionesBanner';
 import { PulsoFooter } from '../components/PulsoFooter';
 import { colors } from '../theme';
 import { requestNotificationPermissions, peekFcmToken } from '../lib/notifications';
+import { getPushDiag, subscribePushDiag } from '../lib/pushDiag';
 import { Id, Pedido, PedidoItem } from '../types/db';
 
 type Tab = 'llamados' | 'pedidos';
@@ -50,6 +51,7 @@ export function PanelScreen() {
   const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [pushDiag, setPushDiagState] = useState<string>(getPushDiag());
 
   useEffect(() => {
     (async () => {
@@ -57,6 +59,9 @@ export function PanelScreen() {
       setFcmToken(await peekFcmToken());
     })();
   }, []);
+
+  // Diagnóstico visible del registro del token en push_tokens.
+  useEffect(() => subscribePushDiag(setPushDiagState), []);
 
   // Traer items de todos los pedidos visibles (activos + historial).
   const pedidoIdsKey = useMemo(
@@ -185,6 +190,7 @@ export function PanelScreen() {
         <Text style={styles.fcmDebug}>
           {fcmToken ? `FCM: ${fcmToken.slice(0, 20)}…` : 'FCM: sin token (emulador o permiso denegado)'}
         </Text>
+        {pushDiag ? <Text style={styles.pushDiag}>{pushDiag}</Text> : null}
 
         <PulsoFooter />
       </ScrollView>
@@ -405,5 +411,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     fontVariant: ['tabular-nums'],
+  },
+  pushDiag: {
+    color: colors.textDim,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
+    marginHorizontal: 16,
+    padding: 8,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });
