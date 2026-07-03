@@ -166,11 +166,52 @@ export function usePedidos(zonas: string[], meseroId: Id) {
               p.id === pedidoId ? { ...p, estado: nuevoEstado, mesero_id: meseroId } : p,
             ),
       );
-      const { error: e } = await supabase.from('pedidos').update(payload).eq('id', pedidoId);
+
+      // Usamos .select() para SABER si el UPDATE realmente tocó la fila. Un
+      // UPDATE bloqueado por RLS no devuelve error pero afecta 0 filas: sin esto
+      // el pedido "desaparecía" y luego un refetch lo traía de vuelta como activo.
+      const primero = await supabase
+        .from('pedidos')
+        .update(payload)
+        .eq('id', pedidoId)
+        .select('id');
+
+      let e = primero.error;
+      let filas = primero.data?.length ?? 0;
+
+      // Fallback: si el payload completo falla (p. ej. faltan las columnas
+      // atendido_at / mesero_id en la tabla), reintentamos solo con `estado`
+      // para que al menos el cambio de estado persista.
+      if (e && (nuevoEstado === PEDIDO_ENTREGADO || nuevoEstado === PEDIDO_EN_PREPARACION)) {
+        // eslint-disable-next-line no-console
+        console.warn('[usePedidos] update completo falló, reintento solo estado:', e.message);
+        const retry = await supabase
+          .from('pedidos')
+          .update({ estado: nuevoEstado })
+          .eq('id', pedidoId)
+          .select('id');
+        e = retry.error;
+        filas = retry.data?.length ?? 0;
+      }
+
       if (e) {
-        setError('No se pudo actualizar el pedido.');
+        // eslint-disable-next-line no-console
+        console.error('[usePedidos] setEstado error:', e.message);
+        setError(`No se pudo actualizar el pedido: ${e.message}`);
         await fetchActivos();
         await fetchHistorial();
+      } else if (filas === 0) {
+        // Sin error pero 0 filas => la política RLS de UPDATE bloqueó el cambio.
+        setError(
+          'La base de datos rechazó el cambio de estado (permisos RLS de UPDATE en "pedidos"). ' +
+            'Agregá una policy de UPDATE para el rol anon.',
+        );
+        await fetchActivos();
+        await fetchHistorial();
+      } else {
+        // Éxito real: refrescamos historial para que aparezca ahí al entregar.
+        setError(null);
+        if (nuevoEstado === PEDIDO_ENTREGADO) await fetchHistorial();
       }
     },
     [meseroId, fetchActivos, fetchHistorial],

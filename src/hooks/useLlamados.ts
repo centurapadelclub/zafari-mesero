@@ -94,13 +94,19 @@ export function useLlamados(zonas: string[], meseroId: Id) {
   const atender = useCallback(
     async (llamadoId: Id) => {
       setActivos((prev) => prev.filter((l) => l.id !== llamadoId));
-      const { error: e } = await supabase
+      const { data, error: e } = await supabase
         .from('llamados')
         .update({ estado: LLAMADO_ATENDIDO, atendido_at: new Date().toISOString(), mesero_id: meseroId })
-        .eq('id', llamadoId);
+        .eq('id', llamadoId)
+        .select('id');
       if (e) {
-        setError('No se pudo marcar como atendido.');
+        setError(`No se pudo marcar como atendido: ${e.message}`);
         await fetchActivos();
+      } else if ((data?.length ?? 0) === 0) {
+        setError('La base rechazó el cambio (permisos RLS de UPDATE en "llamados").');
+        await fetchActivos();
+      } else {
+        setError(null);
       }
       await fetchHistorial();
     },

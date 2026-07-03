@@ -27,3 +27,12 @@ export async function isOnboardingDone(): Promise<boolean> {
 export async function setOnboardingDone(): Promise<void> {
   await AsyncStorage.setItem(KEY_ONBOARDING, 'true');
 }
+
+/**
+ * Borra la marca de onboarding. Lo llamamos al cerrar sesión para que el
+ * PRÓXIMO login vuelva a pedir el permiso "Mostrar sobre otras apps"
+ * (SYSTEM_ALERT_WINDOW) + notificaciones, igual que el primer arranque.
+ */
+export async function clearOnboarding(): Promise<void> {
+  await AsyncStorage.removeItem(KEY_ONBOARDING);
+}

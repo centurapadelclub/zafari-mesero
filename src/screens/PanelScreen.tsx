@@ -19,7 +19,7 @@ import { PedidoHistorialRow, LlamadoHistorialRow } from '../components/Historial
 import { NotificacionesBanner } from '../components/NotificacionesBanner';
 import { PulsoFooter } from '../components/PulsoFooter';
 import { colors } from '../theme';
-import { requestNotificationPermissions } from '../lib/notifications';
+import { requestNotificationPermissions, peekFcmToken } from '../lib/notifications';
 import { Id, Pedido, PedidoItem } from '../types/db';
 
 type Tab = 'llamados' | 'pedidos';
@@ -49,9 +49,13 @@ export function PanelScreen() {
 
   const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
 
   useEffect(() => {
-    requestNotificationPermissions();
+    (async () => {
+      await requestNotificationPermissions();
+      setFcmToken(await peekFcmToken());
+    })();
   }, []);
 
   // Traer items de todos los pedidos visibles (activos + historial).
@@ -173,6 +177,10 @@ export function PanelScreen() {
             busyId={busyId}
           />
         )}
+
+        <Text style={styles.fcmDebug}>
+          {fcmToken ? `FCM: ${fcmToken.slice(0, 20)}…` : 'FCM: sin token (emulador o permiso denegado)'}
+        </Text>
 
         <PulsoFooter />
       </ScrollView>
@@ -383,4 +391,11 @@ const styles = StyleSheet.create({
   histPillText: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
   empty: { color: colors.textMuted, textAlign: 'center', marginVertical: 24, fontSize: 15 },
   emptySmall: { color: colors.textMuted, textAlign: 'center', marginVertical: 12, fontSize: 14 },
+  fcmDebug: {
+    color: colors.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 16,
+    fontVariant: ['tabular-nums'],
+  },
 });

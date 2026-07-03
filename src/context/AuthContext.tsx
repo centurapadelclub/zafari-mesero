@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { deletePushToken, savePushToken } from '../lib/notifications';
+import { clearOnboarding } from '../lib/preferences';
 import { Id, Mesero } from '../types/db';
 
 // Posibles nombres de la columna con el nombre de la zona (por si no es 'nombre').
@@ -182,6 +183,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // ignorar
       }
     }
+    // Reset del onboarding: el próximo login vuelve a pedir el permiso de
+    // "Mostrar sobre otras apps" (SYSTEM_ALERT_WINDOW) + notificaciones.
+    await clearOnboarding();
     setSession(null);
     await AsyncStorage.removeItem(STORAGE_KEY);
   }, []);

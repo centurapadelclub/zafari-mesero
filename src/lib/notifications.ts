@@ -114,6 +114,19 @@ export async function getFcmDeviceToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Devuelve el token FCM actual SIN volver a pedir permisos (para mostrarlo en el
+ * panel como diagnóstico). Null en emulador o si no hay token.
+ */
+export async function peekFcmToken(): Promise<string | null> {
+  try {
+    if (!Device.isDevice) return null;
+    return await messaging().getToken();
+  } catch {
+    return null;
+  }
+}
+
 /** Esc1: guarda el token (upsert por token) al loguear. */
 export async function savePushToken(meseroId: Id): Promise<void> {
   try {
