@@ -90,10 +90,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   extra: {
-    eas: {
-      // projectId de EAS (se puede sobreescribir con la env EAS_PROJECT_ID).
-      projectId: process.env.EAS_PROJECT_ID ?? '1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
-    },
     // Credenciales de Supabase embebidas en el config (además de EXPO_PUBLIC_*).
     // Se leen acá en tiempo de build (cuando las env de EAS están presentes) y
     // quedan disponibles en runtime vía Constants.expoConfig.extra — más robusto
