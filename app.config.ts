@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     policy: 'appVersion',
   },
   updates: {
-    url: 'https://u.expo.dev/1b797dc8-a17e-4d38-9dd2-3a816f0ba354',
+    url: 'https://u.expo.dev/ebc0643b-4c2f-4cf2-a624-5b1765f0e8cc',
   },
   orientation: 'portrait',
   // Ícono de la app (logo de Zafari).
@@ -90,6 +90,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   extra: {
+    eas: {
+      // projectId de EAS (se puede sobreescribir con la env EAS_PROJECT_ID).
+      projectId: process.env.EAS_PROJECT_ID ?? 'ebc0643b-4c2f-4cf2-a624-5b1765f0e8cc',
+    },
     // Credenciales de Supabase embebidas en el config (además de EXPO_PUBLIC_*).
     // Se leen acá en tiempo de build (cuando las env de EAS están presentes) y
     // quedan disponibles en runtime vía Constants.expoConfig.extra — más robusto
