@@ -6,16 +6,19 @@ interface Props {
   onIgnorar: () => void;
 }
 
-const TRACK_WIDTH = 300;
-const KNOB = 78;
+const GOLD = '#D4A017';
+const TRACK_WIDTH = 330;
+const KNOB = 90;
 const MAX = (TRACK_WIDTH - KNOB) / 2; // desplazamiento máximo a cada lado
-const THRESHOLD = MAX * 0.7; // cuánto hay que deslizar para confirmar
+const THRESHOLD = MAX * 0.62; // cuánto hay que deslizar para confirmar
+const KNOB_LEFT = (TRACK_WIDTH - KNOB) / 2;
 
 /**
- * Botón circular deslizable estilo "llamada entrante".
- *  - deslizar a la DERECHA  → onAtender
- *  - deslizar a la IZQUIERDA → onIgnorar
- * Si no se supera el umbral, vuelve al centro.
+ * Botón deslizable estilo "llamada entrante" (referencia Zafari):
+ *  - pista bicolor: rojo (IGNORAR) a la izquierda, verde (ATENDER) a la derecha
+ *  - perilla blanca central con borde dorado e ícono de menú (☰)
+ *  - deslizar a la DERECHA → onAtender ; a la IZQUIERDA → onIgnorar
+ * Si no se supera el umbral, la perilla vuelve al centro.
  */
 export function SlideToAct({ onAtender, onIgnorar }: Props) {
   const x = useRef(new Animated.Value(0)).current;
@@ -52,66 +55,79 @@ export function SlideToAct({ onAtender, onIgnorar }: Props) {
     }),
   ).current;
 
-  // Opacidad de las pistas según el sentido del deslizamiento.
-  const atenderOpacity = x.interpolate({
-    inputRange: [0, MAX],
-    outputRange: [0.35, 1],
-    extrapolate: 'clamp',
-  });
-  const ignorarOpacity = x.interpolate({
-    inputRange: [-MAX, 0],
-    outputRange: [1, 0.35],
-    extrapolate: 'clamp',
-  });
-
   return (
     <View style={styles.wrap}>
-      <View style={styles.track}>
-        <Animated.Text style={[styles.sideLabel, styles.left, { opacity: ignorarOpacity }]}>
-          ◀ Ignorar
-        </Animated.Text>
-        <Animated.Text style={[styles.sideLabel, styles.right, { opacity: atenderOpacity }]}>
-          Atender ▶
-        </Animated.Text>
-
-        <Animated.View
-          style={[styles.knob, { transform: [{ translateX: x }] }]}
-          {...panResponder.panHandlers}
-        >
-          <Text style={styles.knobIcon}>☰</Text>
-        </Animated.View>
+      <View style={styles.pill}>
+        <View style={styles.left}>
+          <Text style={styles.hangup}>📞</Text>
+          <Text style={styles.label}>IGNORAR</Text>
+        </View>
+        <View style={styles.right}>
+          <Text style={styles.label}>ATENDER</Text>
+          <Text style={styles.play}>▶</Text>
+        </View>
       </View>
-      <Text style={styles.hint}>Deslizá el botón</Text>
+
+      <Animated.View
+        style={[styles.knob, { transform: [{ translateX: x }] }]}
+        {...panResponder.panHandlers}
+      >
+        <Text style={styles.knobIcon}>☰</Text>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center' },
-  track: {
-    width: TRACK_WIDTH,
-    height: KNOB + 12,
-    borderRadius: (KNOB + 12) / 2,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  wrap: { width: TRACK_WIDTH, height: KNOB + 10, justifyContent: 'center' },
+  pill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     flexDirection: 'row',
+    borderRadius: (KNOB + 10) / 2,
+    borderWidth: 2,
+    borderColor: GOLD,
+    overflow: 'hidden',
   },
-  sideLabel: { position: 'absolute', color: '#fff', fontWeight: '800', fontSize: 15 },
-  left: { left: 18 },
-  right: { right: 18 },
+  left: {
+    flex: 1,
+    backgroundColor: '#8E1B1B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 22,
+    gap: 10,
+  },
+  right: {
+    flex: 1,
+    backgroundColor: '#1E4A2B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingRight: 22,
+    gap: 10,
+  },
+  label: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 0.5 },
+  hangup: { fontSize: 20, transform: [{ rotate: '135deg' }] },
+  play: { color: '#7CE29A', fontSize: 18 },
   knob: {
+    position: 'absolute',
+    left: KNOB_LEFT,
     width: KNOB,
     height: KNOB,
     borderRadius: KNOB / 2,
     backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: GOLD,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
+    elevation: 10,
+    shadowColor: GOLD,
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
-  knobIcon: { fontSize: 30, color: '#D32F2F', fontWeight: '900' },
-  hint: { color: 'rgba(255,255,255,0.7)', marginTop: 14, fontSize: 13 },
+  knobIcon: { fontSize: 30, color: GOLD, fontWeight: '900' },
 });
