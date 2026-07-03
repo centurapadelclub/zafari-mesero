@@ -1,7 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme';
-import { horaCorta } from '../lib/fecha';
+import { hora12 } from '../lib/fecha';
+import { money } from '../lib/money';
+import { Cronometro } from './Cronometro';
 import {
   Id,
   PEDIDO_ENTREGADO,
@@ -14,70 +16,84 @@ import {
 interface Props {
   pedido: Pedido;
   items?: PedidoItem[];
-  modo: 'activo' | 'historial';
   onPress: () => void;
-  onSetEstado?: (id: Id, estado: string) => void;
+  onSetEstado: (id: Id, estado: string) => void;
+  preparadoPor?: string | null;
   busy?: boolean;
 }
 
 const ESTADO_LABEL: Record<string, string> = {
-  [PEDIDO_PENDIENTE]: 'NUEVO',
+  [PEDIDO_PENDIENTE]: 'PENDIENTE',
   [PEDIDO_EN_PREPARACION]: 'EN PREPARACIÓN',
   [PEDIDO_ENTREGADO]: 'ENTREGADO',
 };
-const ESTADO_COLOR: Record<string, string> = {
-  [PEDIDO_PENDIENTE]: colors.gold,
-  [PEDIDO_EN_PREPARACION]: colors.amber,
-  [PEDIDO_ENTREGADO]: colors.green,
-};
 
-function money(n?: number | null): string {
-  return n == null ? '' : `$${Number(n).toLocaleString('es-AR')}`;
-}
-
-export function PedidoCard({ pedido, items, modo, onPress, onSetEstado, busy }: Props) {
+/** Tarjeta de un pedido ACTIVO (pendiente / en preparación). */
+export function PedidoCard({ pedido, items, onPress, onSetEstado, preparadoPor, busy }: Props) {
   const numero = pedido.numero ?? pedido.id;
-  const estadoColor = ESTADO_COLOR[pedido.estado] ?? colors.textDim;
+  const enPrep = pedido.estado === PEDIDO_EN_PREPARACION;
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.header}>
-        <Text style={styles.numero}>Pedido #{String(numero)}</Text>
-        <View style={[styles.badge, { borderColor: estadoColor }]}>
-          <Text style={[styles.badgeText, { color: estadoColor }]}>
-            {ESTADO_LABEL[pedido.estado] ?? pedido.estado}
-          </Text>
+      {/* Encabezado: nº pedido + hora | pill de estado */}
+      <View style={styles.headRow}>
+        <Text style={styles.numero}>
+          📝 PEDIDO #{String(numero)} · {hora12(pedido.created_at).toUpperCase()}
+        </Text>
+        <View style={styles.pill}>
+          <Text style={styles.pillText}>{ESTADO_LABEL[pedido.estado] ?? pedido.estado}</Text>
         </View>
       </View>
 
-      <View style={styles.metaRow}>
+      {/* Ubicación + cronómetro */}
+      <View style={styles.ubiRow}>
         <Text style={styles.ubicacion}>{pedido.ubicacion}</Text>
-        <Text style={styles.hora}>
-          {modo === 'historial' && pedido.atendido_at
-            ? `entregado ${horaCorta(pedido.atendido_at)}`
-            : horaCorta(pedido.created_at)}
-        </Text>
+        <Cronometro desde={pedido.created_at} />
       </View>
-      {pedido.nombre_cliente ? <Text style={styles.cliente}>👤 {pedido.nombre_cliente}</Text> : null}
 
-      {/* Detalle de lo que pidieron */}
+      {/* Cliente + teléfono */}
+      {pedido.nombre_cliente || pedido.telefono_cliente ? (
+        <Text style={styles.cliente}>
+          {pedido.nombre_cliente ?? ''}
+          {pedido.nombre_cliente && pedido.telefono_cliente ? ' · ' : ''}
+          {pedido.telefono_cliente ? (
+            <Text
+              style={styles.tel}
+              onPress={() => Linking.openURL(`tel:${pedido.telefono_cliente}`).catch(() => {})}
+            >
+              {pedido.telefono_cliente}
+            </Text>
+          ) : null}
+        </Text>
+      ) : null}
+
+      {/* En preparación por X */}
+      {enPrep && preparadoPor ? (
+        <Text style={styles.prep}>
+          En preparación por <Text style={styles.prepNombre}>{preparadoPor}</Text>
+        </Text>
+      ) : null}
+
+      {/* Detalle */}
       {items && items.length ? (
         <View style={styles.items}>
           {items.map((it, i) => (
-            <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemQty}>{it.cantidad}×</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemName}>{it.nombre}</Text>
-                {it.modificadores.map((m, j) => (
-                  <Text key={j} style={styles.itemMod}>
-                    + {m.nombre_opcion}
-                    {m.precio_extra ? ` (${money(m.precio_extra)})` : ''}
-                  </Text>
-                ))}
+            <View key={i}>
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>
+                  <Text style={styles.itemQty}>{it.cantidad}x </Text>
+                  {it.nombre}
+                </Text>
+                {it.subtotal != null ? (
+                  <Text style={styles.itemPrecio}>{money(it.subtotal)}</Text>
+                ) : null}
               </View>
-              {it.subtotal != null ? (
-                <Text style={styles.itemPrecio}>{money(it.subtotal)}</Text>
-              ) : null}
+              {it.modificadores.map((m, j) => (
+                <Text key={j} style={styles.itemMod}>
+                  + {m.nombre_opcion}
+                  {m.precio_extra ? ` (${money(m.precio_extra)})` : ''}
+                </Text>
+              ))}
             </View>
           ))}
         </View>
@@ -85,66 +101,83 @@ export function PedidoCard({ pedido, items, modo, onPress, onSetEstado, busy }: 
         <Text style={styles.itemsVacio}>Tocá para ver el detalle</Text>
       )}
 
-      <View style={styles.footerRow}>
-        <Text style={styles.total}>Total {money(pedido.total)}</Text>
-        {modo === 'activo' && onSetEstado ? (
-          <View>
-            {pedido.estado === PEDIDO_PENDIENTE ? (
-              <Pressable
-                style={[styles.boton, { backgroundColor: colors.amber }]}
-                onPress={() => onSetEstado(pedido.id, PEDIDO_EN_PREPARACION)}
-                disabled={busy}
-              >
-                <Text style={styles.botonText}>Marcar en preparación</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.boton, { backgroundColor: colors.green }]}
-                onPress={() => onSetEstado(pedido.id, PEDIDO_ENTREGADO)}
-                disabled={busy}
-              >
-                <Text style={styles.botonText}>Marcar entregado</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : null}
+      {/* Total */}
+      <View style={styles.divider} />
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>TOTAL</Text>
+        <Text style={styles.totalValue}>{money(pedido.total)}</Text>
       </View>
+
+      {/* Acción */}
+      {pedido.estado === PEDIDO_PENDIENTE ? (
+        <Pressable
+          style={styles.boton}
+          onPress={() => onSetEstado(pedido.id, PEDIDO_EN_PREPARACION)}
+          disabled={busy}
+        >
+          <Text style={styles.botonText}>Marcar como En preparación</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={styles.boton}
+          onPress={() => onSetEstado(pedido.id, PEDIDO_ENTREGADO)}
+          disabled={busy}
+        >
+          <Text style={styles.botonText}>Marcar como Entregado</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  numero: { color: colors.gold, fontSize: 18, fontWeight: '900' },
-  badge: { borderWidth: 1.5, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  ubicacion: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  hora: { color: colors.textDim, fontSize: 13 },
-  cliente: { color: colors.textDim, fontSize: 14, marginTop: 2 },
-  items: { marginTop: 10, gap: 6, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
-  itemRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  itemQty: { color: colors.gold, fontWeight: '800', fontSize: 14, minWidth: 28 },
-  itemName: { color: colors.text, fontSize: 15 },
-  itemMod: { color: colors.textDim, fontSize: 12 },
-  itemNota: { color: colors.amber, fontSize: 12 },
-  itemPrecio: { color: colors.textDim, fontSize: 13 },
-  itemsVacio: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic', marginTop: 8 },
-  footerRow: {
+  headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  numero: { color: colors.gold, fontSize: 13, fontWeight: '800', flex: 1 },
+  pill: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.goldSoftBg,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pillText: { color: colors.goldDark, fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  ubiRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
-  total: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  boton: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14 },
-  botonText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  ubicacion: { color: colors.text, fontSize: 22, fontWeight: '900', flex: 1 },
+  cliente: { color: colors.textDim, fontSize: 14, marginTop: 4 },
+  tel: { color: colors.gold, textDecorationLine: 'underline' },
+  prep: { color: colors.textDim, fontSize: 13, marginTop: 6 },
+  prepNombre: { color: colors.gold, fontWeight: '800' },
+  items: { marginTop: 12, gap: 6 },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
+  itemName: { color: colors.text, fontSize: 15, flex: 1 },
+  itemQty: { color: colors.gold, fontWeight: '900' },
+  itemMod: { color: colors.textMuted, fontSize: 13, marginTop: 1, marginLeft: 2 },
+  itemPrecio: { color: colors.gold, fontSize: 15, fontWeight: '700' },
+  itemsVacio: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic', marginTop: 10 },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  totalLabel: { color: colors.gold, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  totalValue: { color: colors.gold, fontSize: 20, fontWeight: '900' },
+  boton: {
+    marginTop: 14,
+    backgroundColor: colors.green,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  botonText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });

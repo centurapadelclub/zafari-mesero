@@ -1,20 +1,16 @@
-/**
- * Paleta y tokens visuales — dorado sobre negro/oscuro (mismo espíritu que la web).
- * ⚠️ Ajustar a los valores EXACTOS de la web cuando lleguen las capturas.
- */
+/** Paleta — tema CLARO, dorado sobre blanco (igual que el portal web /mesero). */
 export const colors = {
   gold: '#D4A017',
-  goldSoft: '#E8C566',
-  bg: '#0d0d0d',
-  bgCard: '#1a1a1a',
-  bgCard2: '#232323',
-  border: '#333',
-  text: '#f2f2f2',
-  textDim: '#9a9a9a',
-  textMuted: '#6f6f6f',
-  green: '#2E7D32',
-  greenBright: '#43A047',
-  red: '#D32F2F',
-  amber: '#F57C00',
-  blue: '#1976D2',
+  goldDark: '#B8860B',
+  goldSoftBg: '#FBF4DE', // fondo tenue de las pills de estado (dorado clarito)
+  green: '#22A45A',
+  greenDark: '#1B8B4A',
+  bg: '#f4f4f5',
+  card: '#ffffff',
+  border: '#ededed',
+  text: '#1a1a1a',
+  textDim: '#7a7a7a',
+  textMuted: '#a0a0a0',
+  pillBg: '#eeeeee',
+  red: '#E23B3B',
 };

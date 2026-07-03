@@ -62,9 +62,22 @@ async function attachModificadores(items: PedidoItem[]): Promise<void> {
 
 const ACTIVOS = [PEDIDO_PENDIENTE, PEDIDO_EN_PREPARACION];
 
+/** Resuelve mesero_id -> nombre para una lista de filas de pedido. */
+async function resolverNombresMeseros(rows: Pedido[]): Promise<Record<string, string>> {
+  const ids = Array.from(
+    new Set(rows.map((r) => r.mesero_id).filter((v) => v != null)),
+  ) as Id[];
+  if (!ids.length) return {};
+  const { data } = await supabase.from('meseros').select('id, nombre').in('id', ids);
+  return Object.fromEntries(
+    (data ?? []).map((m: { id: Id; nombre: string }) => [String(m.id), m.nombre]),
+  );
+}
+
 export function usePedidos(zonas: string[], meseroId: Id) {
   const [activos, setActivos] = useState<Pedido[]>([]);
   const [historial, setHistorial] = useState<Pedido[]>([]);
+  const [nombrePorMesero, setNombrePorMesero] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +104,10 @@ export function usePedidos(zonas: string[], meseroId: Id) {
       console.error('[usePedidos] activos:', e.message);
       setError('No se pudieron cargar los pedidos.');
     } else {
-      setActivos(data ?? []);
+      const rows = data ?? [];
+      setActivos(rows);
+      const nombres = await resolverNombresMeseros(rows);
+      setNombrePorMesero((prev) => ({ ...prev, ...nombres }));
     }
     setLoading(false);
   }, []);
@@ -134,15 +150,21 @@ export function usePedidos(zonas: string[], meseroId: Id) {
   const setEstadoPedido = useCallback(
     async (pedidoId: Id, nuevoEstado: string) => {
       const payload: Record<string, unknown> = { estado: nuevoEstado };
+      // Registramos quién lo atiende tanto al ponerlo "en preparación" (para
+      // mostrar "En preparación por X") como al entregarlo.
+      if (nuevoEstado === PEDIDO_EN_PREPARACION || nuevoEstado === PEDIDO_ENTREGADO) {
+        payload.mesero_id = meseroId;
+      }
       if (nuevoEstado === PEDIDO_ENTREGADO) {
         payload.atendido_at = new Date().toISOString();
-        payload.mesero_id = meseroId;
       }
       // Optimista
       setActivos((prev) =>
         nuevoEstado === PEDIDO_ENTREGADO
           ? prev.filter((p) => p.id !== pedidoId)
-          : prev.map((p) => (p.id === pedidoId ? { ...p, estado: nuevoEstado } : p)),
+          : prev.map((p) =>
+              p.id === pedidoId ? { ...p, estado: nuevoEstado, mesero_id: meseroId } : p,
+            ),
       );
       const { error: e } = await supabase.from('pedidos').update(payload).eq('id', pedidoId);
       if (e) {
@@ -200,6 +222,7 @@ export function usePedidos(zonas: string[], meseroId: Id) {
   return {
     activos,
     historial,
+    nombrePorMesero,
     loading,
     error,
     refetch: fetchActivos,

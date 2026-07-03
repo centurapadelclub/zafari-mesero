@@ -1,64 +1,52 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { usePedidos } from '../hooks/usePedidos';
 import { useLlamados } from '../hooks/useLlamados';
 import { PedidoCard } from '../components/PedidoCard';
 import { PedidoDetalleModal } from '../components/PedidoDetalleModal';
-import { LlamadoActivoCard, LlamadoHistorialCard } from '../components/LlamadoCards';
+import { LlamadoActivoCard } from '../components/LlamadoCards';
+import { PedidoHistorialRow, LlamadoHistorialRow } from '../components/HistorialRows';
+import { NotificacionesBanner } from '../components/NotificacionesBanner';
 import { PulsoFooter } from '../components/PulsoFooter';
 import { colors } from '../theme';
 import { requestNotificationPermissions } from '../lib/notifications';
 import { Id, Pedido, PedidoItem } from '../types/db';
 
-type Tab = 'pedidos' | 'llamados';
-type Sub = 'activos' | 'historial';
+type Tab = 'llamados' | 'pedidos';
 
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  big,
-}: {
-  value: T;
-  options: { key: T; label: string; badge?: number }[];
-  onChange: (v: T) => void;
-  big?: boolean;
-}) {
+function Badge({ n }: { n: number }) {
+  if (!n) return null;
   return (
-    <View style={[styles.seg, big && styles.segBig]}>
-      {options.map((o) => {
-        const active = o.key === value;
-        return (
-          <Pressable
-            key={o.key}
-            style={[styles.segItem, active && styles.segItemActive]}
-            onPress={() => onChange(o.key)}
-          >
-            <Text style={[styles.segText, big && styles.segTextBig, active && styles.segTextActive]}>
-              {o.label}
-              {o.badge ? `  ${o.badge}` : ''}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{n}</Text>
     </View>
   );
 }
 
 export function PanelScreen() {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const zonas = session?.zonas ?? [];
   const meseroId = session?.id ?? '';
+  const nombre = session?.nombre ?? '';
 
   const pedidos = usePedidos(zonas, meseroId);
   const llamados = useLlamados(zonas, meseroId);
 
-  const [tab, setTab] = useState<Tab>('pedidos');
-  const [sub, setSub] = useState<Sub>('activos');
+  const [tab, setTab] = useState<Tab>('llamados');
   const [busyId, setBusyId] = useState<Id | null>(null);
 
-  // Items de los pedidos visibles (para mostrar el detalle en las tarjetas).
   const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
 
@@ -97,102 +85,97 @@ export function PanelScreen() {
     await llamados.atender(id);
     setBusyId(null);
   };
-  const onCancelar = async (id: Id) => {
+  const onRegresar = async (id: Id) => {
     setBusyId(id);
     await llamados.cancelarAtendido(id);
     setBusyId(null);
   };
 
-  // ---- Datos y render según pestaña ----
-  const { data, renderItem, refreshing, onRefresh, emptyText } = useMemo(() => {
-    if (tab === 'pedidos') {
-      const list = sub === 'activos' ? pedidos.activos : pedidos.historial;
-      return {
-        data: list as unknown[],
-        refreshing: pedidos.loading,
-        onRefresh: pedidos.refetch,
-        emptyText: sub === 'activos' ? 'No hay pedidos activos' : 'Sin pedidos entregados hoy',
-        renderItem: ({ item }: { item: unknown }) => {
-          const p = item as Pedido;
-          return (
-            <PedidoCard
-              pedido={p}
-              items={itemsMap[String(p.id)]}
-              modo={sub === 'activos' ? 'activo' : 'historial'}
-              onPress={() => setDetalle(p)}
-              onSetEstado={onSetEstado}
-              busy={busyId === p.id}
-            />
-          );
-        },
-      };
-    }
-    // llamados
-    const list = sub === 'activos' ? llamados.activos : llamados.historial;
-    return {
-      data: list as unknown[],
-      refreshing: llamados.loading,
-      onRefresh: async () => {},
-      emptyText: sub === 'activos' ? 'No hay llamados activos' : 'Sin llamados atendidos hoy',
-      renderItem: ({ item }: { item: unknown }) =>
-        sub === 'activos' ? (
-          <LlamadoActivoCard
-            llamado={item as never}
-            onAtender={onAtender}
-            busy={busyId === (item as Pedido).id}
-          />
-        ) : (
-          <LlamadoHistorialCard
-            llamado={item as never}
-            onCancelar={onCancelar}
-            busy={busyId === (item as Pedido).id}
-          />
-        ),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, sub, pedidos, llamados, itemsMap, busyId]);
+  const refreshing = tab === 'pedidos' ? pedidos.loading : llamados.loading;
+  const onRefresh = () => {
+    pedidos.refetch();
+  };
 
   const error = pedidos.error ?? llamados.error;
 
   return (
-    <View style={styles.container}>
-      <Segmented<Tab>
-        big
-        value={tab}
-        onChange={(v) => setTab(v)}
-        options={[
-          { key: 'pedidos', label: 'PEDIDOS', badge: pedidos.activos.length || undefined },
-          { key: 'llamados', label: 'LLAMADOS', badge: llamados.activos.length || undefined },
-        ]}
-      />
-      <Segmented<Sub>
-        value={sub}
-        onChange={(v) => setSub(v)}
-        options={[
-          { key: 'activos', label: 'Activos' },
-          { key: 'historial', label: 'Historial' },
-        ]}
-      />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header: saludo + controles */}
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.kicker}>{tab === 'llamados' ? 'MIS LLAMADOS' : 'MIS PEDIDOS'}</Text>
+          <Text style={styles.nombre}>{nombre}</Text>
+        </View>
+        <View style={styles.headerCtrls}>
+          <Pressable
+            onPress={() => navigation.navigate('Preferences' as never)}
+            style={styles.headerBtn}
+            hitSlop={8}
+          >
+            <Text style={styles.gear}>⚙️</Text>
+          </Pressable>
+          <Pressable onPress={() => signOut()} style={styles.salirBtn} hitSlop={8}>
+            <Text style={styles.salirText}>Salir</Text>
+          </Pressable>
+        </View>
+      </View>
 
-      {!zonas.length ? (
-        <Text style={styles.warn}>⚠️ Sin zonas asignadas</Text>
-      ) : null}
+      <NotificacionesBanner />
+
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <Pressable
+          style={[styles.tab, tab === 'llamados' ? styles.tabActive : styles.tabInactive]}
+          onPress={() => setTab('llamados')}
+        >
+          <Text style={[styles.tabText, tab === 'llamados' && styles.tabTextActive]}>
+            📋 Llamados
+          </Text>
+          <Badge n={llamados.activos.length} />
+        </Pressable>
+        <Pressable
+          style={[styles.tab, tab === 'pedidos' ? styles.tabActive : styles.tabInactive]}
+          onPress={() => setTab('pedidos')}
+        >
+          <Text style={[styles.tabText, tab === 'pedidos' && styles.tabTextActive]}>
+            📝 Pedidos
+          </Text>
+          <Badge n={pedidos.activos.length} />
+        </Pressable>
+      </View>
+
+      {!zonas.length ? <Text style={styles.warn}>⚠️ Sin zonas asignadas</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <FlatList
-        data={data}
-        keyExtractor={(item, i) => `${(item as Pedido).id ?? i}`}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} />
         }
-        ListEmptyComponent={
-          !refreshing ? <Text style={styles.empty}>{emptyText}</Text> : null
-        }
-      />
+      >
+        {tab === 'llamados' ? (
+          <LlamadosTab
+            zonas={zonas}
+            activos={llamados.activos}
+            historial={llamados.historial}
+            onAtender={onAtender}
+            onRegresar={onRegresar}
+            busyId={busyId}
+          />
+        ) : (
+          <PedidosTab
+            activos={pedidos.activos}
+            historial={pedidos.historial}
+            itemsMap={itemsMap}
+            nombrePorMesero={pedidos.nombrePorMesero}
+            onSetEstado={onSetEstado}
+            onOpen={setDetalle}
+            busyId={busyId}
+          />
+        )}
 
-      <PulsoFooter />
+        <PulsoFooter />
+      </ScrollView>
 
       <PedidoDetalleModal
         pedido={detalle}
@@ -204,23 +187,165 @@ export function PanelScreen() {
   );
 }
 
+function SeccionHistorial({ count, label }: { count: number; label: string }) {
+  return (
+    <View style={styles.histHead}>
+      <Text style={styles.histTitle}>HISTORIAL DE HOY</Text>
+      <View style={styles.histPill}>
+        <Text style={styles.histPillText}>
+          {count} {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function LlamadosTab({
+  zonas,
+  activos,
+  historial,
+  onAtender,
+  onRegresar,
+  busyId,
+}: {
+  zonas: string[];
+  activos: ReturnType<typeof useLlamados>['activos'];
+  historial: ReturnType<typeof useLlamados>['historial'];
+  onAtender: (id: Id) => void;
+  onRegresar: (id: Id) => void;
+  busyId: Id | null;
+}) {
+  return (
+    <>
+      {zonas.length ? (
+        <View style={styles.zonaChips}>
+          {zonas.map((z) => (
+            <View key={z} style={styles.zonaChip}>
+              <Text style={styles.zonaChipText}>{z}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {activos.length ? (
+        activos.map((l) => (
+          <LlamadoActivoCard
+            key={String(l.id)}
+            llamado={l}
+            onAtender={onAtender}
+            busy={busyId === l.id}
+          />
+        ))
+      ) : (
+        <Text style={styles.empty}>No hay llamados activos</Text>
+      )}
+
+      <SeccionHistorial count={historial.length} label="atendidos" />
+      {historial.length ? (
+        historial.map((l) => (
+          <LlamadoHistorialRow
+            key={String(l.id)}
+            llamado={l}
+            onRegresar={onRegresar}
+            busy={busyId === l.id}
+          />
+        ))
+      ) : (
+        <Text style={styles.emptySmall}>Sin llamados atendidos hoy</Text>
+      )}
+    </>
+  );
+}
+
+function PedidosTab({
+  activos,
+  historial,
+  itemsMap,
+  nombrePorMesero,
+  onSetEstado,
+  onOpen,
+  busyId,
+}: {
+  activos: Pedido[];
+  historial: Pedido[];
+  itemsMap: Record<string, PedidoItem[]>;
+  nombrePorMesero: Record<string, string>;
+  onSetEstado: (id: Id, estado: string) => void;
+  onOpen: (p: Pedido) => void;
+  busyId: Id | null;
+}) {
+  return (
+    <>
+      {activos.length ? (
+        activos.map((p) => (
+          <PedidoCard
+            key={String(p.id)}
+            pedido={p}
+            items={itemsMap[String(p.id)]}
+            preparadoPor={p.mesero_id != null ? nombrePorMesero[String(p.mesero_id)] : null}
+            onPress={() => onOpen(p)}
+            onSetEstado={onSetEstado}
+            busy={busyId === p.id}
+          />
+        ))
+      ) : (
+        <Text style={styles.empty}>No hay pedidos activos</Text>
+      )}
+
+      <SeccionHistorial count={historial.length} label="entregados" />
+      {historial.length ? (
+        historial.map((p) => (
+          <PedidoHistorialRow key={String(p.id)} pedido={p} onPress={() => onOpen(p)} />
+        ))
+      ) : (
+        <Text style={styles.emptySmall}>Sin pedidos entregados hoy</Text>
+      )}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  seg: {
+  header: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 10,
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 4,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
-  segBig: { marginTop: 12 },
-  segItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-  segItemActive: { backgroundColor: colors.gold },
-  segText: { color: colors.textDim, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
-  segTextBig: { fontSize: 15 },
-  segTextActive: { color: '#000' },
-  warn: { color: colors.amber, textAlign: 'center', marginTop: 10, fontWeight: '700' },
+  kicker: { color: colors.gold, fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
+  nombre: { color: colors.text, fontSize: 30, fontWeight: '900', marginTop: 2 },
+  headerCtrls: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  headerBtn: { padding: 6 },
+  gear: { fontSize: 20 },
+  salirBtn: { paddingVertical: 6, paddingHorizontal: 8 },
+  salirText: { color: colors.textDim, fontSize: 15, fontWeight: '700' },
+  tabs: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  tabActive: { backgroundColor: colors.gold, borderColor: colors.gold },
+  tabInactive: { backgroundColor: colors.card, borderColor: colors.border },
+  tabText: { color: colors.textDim, fontSize: 15, fontWeight: '800' },
+  tabTextActive: { color: '#000' },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.red,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  warn: { color: colors.goldDark, textAlign: 'center', marginTop: 10, fontWeight: '700' },
   error: {
     color: '#fff',
     backgroundColor: colors.red,
@@ -230,6 +355,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontWeight: '600',
   },
-  list: { padding: 16, flexGrow: 1 },
-  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 60, fontSize: 15 },
+  scroll: { padding: 16, paddingBottom: 8 },
+  zonaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  zonaChip: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.goldSoftBg,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  zonaChipText: { color: colors.goldDark, fontSize: 13, fontWeight: '800' },
+  histHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  histTitle: { color: colors.textDim, fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+  histPill: {
+    backgroundColor: colors.pillBg,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  histPillText: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
+  empty: { color: colors.textMuted, textAlign: 'center', marginVertical: 24, fontSize: 15 },
+  emptySmall: { color: colors.textMuted, textAlign: 'center', marginVertical: 12, fontSize: 14 },
 });
