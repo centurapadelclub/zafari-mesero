@@ -68,9 +68,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     '@react-native-firebase/app',
     // RNFirebase en iOS requiere frameworks estáticos.
     ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
-    // Marca la MainActivity para mostrarse sobre el bloqueo (Esc2).
+    // Salvaguarda: quita showWhenLocked/turnScreenOn ESTÁTICOS de la MainActivity
+    // (el comportamiento sobre-bloqueo se controla de forma dinámica).
     // (@notifee/react-native se autolinkea, no necesita entrada en plugins.)
     './plugins/withFullScreenIntent',
+    // Blinda el arranque en frío con el celular bloqueado (FSI de llamada):
+    // activa showWhenLocked en MainActivity.onCreate solo si el keyguard está
+    // bloqueado. El JS lo desactiva al cerrar la pantalla de llamada.
+    './plugins/withIncomingCallActivity',
     // Splash screen: logo de Zafari sobre fondo oscuro.
     [
       'expo-splash-screen',
