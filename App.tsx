@@ -8,7 +8,7 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ensureChannels } from './src/lib/notifications';
-import { displayHeadsUp, handleNotifeeEvent, parseCallData } from './src/lib/incomingCall';
+import { displayIncomingCall, handleNotifeeEvent, parseCallData } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 
 export default function App() {
@@ -43,11 +43,16 @@ export default function App() {
 
     let unsubOnMessage = () => {};
     try {
-      // Esc3: con la app abierta, un push llega como heads-up + vibración corta.
+      // Foreground: SIEMPRE registramos una notificación nativa de Android
+      // (notifee.displayNotification con el canal de llamada). La pantalla
+      // IncomingCallScreen aparece además vía el evento de notifee (DELIVERED).
+      // Antes se usaba un heads-up efímero (timeoutAfter/autoCancel) que no
+      // quedaba en la barra; ahora usamos el mismo display persistente que en
+      // background, así la notificación queda registrada en foreground también.
       unsubOnMessage = messaging().onMessage(async (remoteMessage) => {
         try {
           const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-          if (call) await displayHeadsUp(call);
+          if (call) await displayIncomingCall(call);
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[App] error en onMessage:', err);
