@@ -140,7 +140,7 @@ async function sendFcm(
   projectId: string,
   token: string,
   data: Record<string, string>,
-): Promise<void> {
+): Promise<{ ok: boolean; status: number }> {
   const message = {
     message: {
       token,
@@ -162,9 +162,11 @@ async function sendFcm(
       body: JSON.stringify(message),
     },
   );
-  if (!res.ok) {
-    console.error(`FCM error para token ...${token.slice(-8)}: ${res.status} ${await res.text()}`);
-  }
+  const bodyText = await res.text();
+  const suffix = `...${token.slice(-8)}`;
+  // 5) Resultado de CADA envío FCM (status + body de la respuesta de FCM).
+  console.log(`[notify] FCM send token=${suffix} -> status=${res.status} body=${bodyText}`);
+  return { ok: res.ok, status: res.status };
 }
 
 Deno.serve(async (req) => {
@@ -185,6 +187,8 @@ Deno.serve(async (req) => {
     }
 
     const ubicacion = String(record.ubicacion ?? '');
+    // 1) Qué ubicacion recibió.
+    console.log(`[notify] tabla=${table} estado=${record.estado} ubicacion="${ubicacion}"`);
     if (!ubicacion) {
       return new Response(JSON.stringify({ skipped: 'sin ubicacion' }), { status: 200 });
     }
@@ -193,6 +197,8 @@ Deno.serve(async (req) => {
     const zonas = await sb<{ id: string }[]>(
       `zonas?nombre=eq.${encodeURIComponent(ubicacion)}&select=id`,
     );
+    // 2) Cuántas zonas encontró.
+    console.log(`[notify] zonas encontradas=${zonas.length} ids=${JSON.stringify(zonas.map((z) => z.id))}`);
     if (!zonas.length) {
       return new Response(JSON.stringify({ skipped: 'zona no encontrada', ubicacion }), { status: 200 });
     }
@@ -203,6 +209,8 @@ Deno.serve(async (req) => {
       `asignaciones?zona_id=in.(${zonaIds.join(',')})&select=mesero_id`,
     );
     const meseroIds = [...new Set(asigs.map((a) => a.mesero_id))];
+    // 3) Cuántos meseros asignados encontró.
+    console.log(`[notify] meseros asignados=${meseroIds.length} ids=${JSON.stringify(meseroIds)}`);
     if (!meseroIds.length) {
       return new Response(JSON.stringify({ skipped: 'sin meseros asignados' }), { status: 200 });
     }
@@ -211,12 +219,19 @@ Deno.serve(async (req) => {
     const tokens = await sb<{ token: string }[]>(
       `push_tokens?mesero_id=in.(${meseroIds.join(',')})&select=token`,
     );
+    // 4) Cuántos tokens encontró en push_tokens.
+    console.log(
+      `[notify] tokens en push_tokens=${tokens.length} sufijos=${JSON.stringify(
+        tokens.map((t) => `...${t.token.slice(-8)}`),
+      )}`,
+    );
     if (!tokens.length) {
       return new Response(JSON.stringify({ skipped: 'sin tokens registrados' }), { status: 200 });
     }
 
     // 4) Enviar FCM
     const sa = JSON.parse(Deno.env.get('FCM_SERVICE_ACCOUNT')!) as ServiceAccount;
+    console.log(`[notify] service account project_id=${sa.project_id}`);
     const accessToken = await getAccessToken(sa);
     const content = buildContent(table, record);
     const data: Record<string, string> = {
@@ -228,14 +243,27 @@ Deno.serve(async (req) => {
       body: content.body,
     };
 
-    await Promise.all(
+    const results = await Promise.all(
       tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data)),
     );
+    const okCount = results.filter((r) => r.ok).length;
+    // Resumen final del envío.
+    console.log(`[notify] resumen: enviados_ok=${okCount}/${tokens.length} ubicacion="${ubicacion}"`);
 
-    return new Response(JSON.stringify({ sent: tokens.length, ubicacion }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        ubicacion,
+        zonas: zonas.length,
+        meseros: meseroIds.length,
+        tokens: tokens.length,
+        enviados_ok: okCount,
+        resultados: results.map((r) => r.status),
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   } catch (err) {
     console.error('notify-llamado error:', err);
     return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
