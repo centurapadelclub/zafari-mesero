@@ -62,7 +62,8 @@ Sugerencia de qué capturar (2 pantallas):
 > que ya cumple los requisitos de Play.
 
 ## Otros assets que Play puede pedir
-- **Gráfico destacado (feature graphic):** 1024 × 500 px (obligatorio para la
-  ficha, aunque sea prueba interna). No incluido acá; se puede generar aparte.
+- **Gráfico destacado (feature graphic):** `store-assets/feature-graphic.png`
+  — 1024 × 500 px, logo centrado sobre fondo #0d0d0d (obligatorio en la ficha,
+  aun para prueba interna).
 - **Ícono de la app en el dispositivo:** ya está en el build (adaptive icon en
   `app.config.ts`), es independiente de este ícono 512×512 de la ficha.
