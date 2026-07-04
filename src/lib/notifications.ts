@@ -144,12 +144,27 @@ export async function peekFcmToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Proyecto/sender de FCM con el que está registrada la app (según
+ * google-services.json embebido en el build). DEBE coincidir con el proyecto del
+ * service account que usa la Edge Function para enviar por FCM v1; si no, los
+ * envíos dan UNREGISTERED aunque el token sea válido.
+ */
+export function fcmProjectInfo(): string {
+  try {
+    const o = messaging().app.options as { projectId?: string; messagingSenderId?: string };
+    return `proyecto=${o.projectId ?? '?'} sender=${o.messagingSenderId ?? '?'}`;
+  } catch {
+    return 'proyecto=? sender=?';
+  }
+}
+
 /** Esc1: guarda el token (upsert por token) al loguear. */
 export async function savePushToken(meseroId: Id): Promise<void> {
   try {
     const token = await getFcmDeviceToken();
     if (!token) {
-      setPushDiag(`push_tokens: sin token FCM (mesero_id=${meseroId})`);
+      setPushDiag(`push_tokens: sin token FCM (mesero_id=${meseroId})\n${fcmProjectInfo()}`);
       return;
     }
     const tok10 = token.slice(0, 10);
@@ -168,11 +183,13 @@ export async function savePushToken(meseroId: Id): Promise<void> {
         `push_tokens ✗ ERROR\nmesero_id=${meseroId}\ntoken=${tok10}…\nmsg: ${error.message}` +
           (error.details ? `\ndetails: ${error.details}` : '') +
           (error.hint ? `\nhint: ${error.hint}` : '') +
-          (error.code ? `\ncode: ${error.code}` : ''),
+          (error.code ? `\ncode: ${error.code}` : '') +
+          `\n${fcmProjectInfo()}`,
       );
     } else {
       setPushDiag(
-        `push_tokens ✓ OK\nmesero_id=${meseroId}\ntoken=${tok10}…\nfilas=${data?.length ?? 0}`,
+        `push_tokens ✓ OK\nmesero_id=${meseroId}\ntoken=${tok10}…\nfilas=${data?.length ?? 0}` +
+          `\n${fcmProjectInfo()}`,
       );
     }
   } catch (err) {
