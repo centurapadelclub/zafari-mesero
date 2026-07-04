@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     bottom: 16,
     alignSelf: 'center',
     fontSize: 11,
-    color: '#bbb',
+    color: '#333333',
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
