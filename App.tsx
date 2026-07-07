@@ -8,7 +8,12 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { AuthProvider } from './src/context/AuthContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ensureChannels } from './src/lib/notifications';
-import { displayIncomingCall, handleNotifeeEvent, parseCallData } from './src/lib/incomingCall';
+import {
+  displayIncomingCall,
+  handleNotifeeEvent,
+  parseCallData,
+  callToRoute,
+} from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 
 export default function App() {
@@ -73,6 +78,25 @@ export default function App() {
       console.error('[App] notifee.onForegroundEvent no disponible:', err);
     }
 
+    // App EN BACKGROUND y el mesero toca la notificación del SISTEMA (bloque
+    // `notification` de FCM): RNFirebase entrega el tap acá (no notifee, porque
+    // la notificación la mostró Android, no notifee). Navegamos a la llamada.
+    let unsubOpened = () => {};
+    try {
+      unsubOpened = messaging().onNotificationOpenedApp((remoteMessage) => {
+        try {
+          const call = parseCallData(remoteMessage?.data as Record<string, unknown> | undefined);
+          if (call) navigateToIncomingCall(callToRoute(call));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('[App] error en onNotificationOpenedApp:', err);
+        }
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[App] messaging().onNotificationOpenedApp no disponible:', err);
+    }
+
     return () => {
       try {
         unsubOnMessage();
@@ -81,6 +105,11 @@ export default function App() {
       }
       try {
         unsubNotifee();
+      } catch {
+        // ignorar
+      }
+      try {
+        unsubOpened();
       } catch {
         // ignorar
       }
