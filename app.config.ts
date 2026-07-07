@@ -18,9 +18,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   scheme: 'zafarimesero',
   version: '1.0.0',
   // EAS Update (expo-updates): entrega de actualizaciones OTA.
-  runtimeVersion: {
-    policy: 'appVersion',
-  },
+  // runtimeVersion FIJO (string literal), NO policy: así el runtimeVersion no
+  // depende del fingerprint del proyecto y cualquier OTA publicado con
+  // runtimeVersion '1.0.0' aplica a un build cuyo runtimeVersion también sea
+  // '1.0.0'. OJO: requiere un build NUEVO para que el build tome este valor.
+  runtimeVersion: '1.0.0',
   updates: {
     url: 'https://u.expo.dev/ebc0643b-4c2f-4cf2-a624-5b1765f0e8cc',
   },
