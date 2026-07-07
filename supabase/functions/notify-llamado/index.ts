@@ -131,22 +131,28 @@ function buildContent(table: string, record: Record<string, unknown>) {
   };
 }
 
-// ---- Envío FCM v1 (mensaje DATA-only de alta prioridad) ----
-// Enviamos data-only (sin bloque `notification`) para que la app controle la
-// presentación: la app decide entre Full Screen Intent (Esc2, celular bloqueado)
-// y heads-up (Esc3, celular en uso). El título/cuerpo van dentro de `data`.
+// ---- Envío FCM v1 (mensaje HÍBRIDO notification + data, alta prioridad) ----
+// notification: Android lo muestra automáticamente en la barra cuando la app
+//   está en segundo plano / cerrada (garantiza que SIEMPRE se vea el aviso).
+// data: se mantiene igual para que la app procese la llamada (Full Screen Intent
+//   / heads-up) cuando está abierta (onMessage) o al tocar la notificación.
 async function sendFcm(
   accessToken: string,
   projectId: string,
   token: string,
   data: Record<string, string>,
+  notification: { title: string; body: string },
 ): Promise<{ ok: boolean; status: number }> {
   const message = {
     message: {
       token,
+      notification, // { title, body } — mostrado por el sistema en background
       data,
       android: {
         priority: 'high', // despierta el dispositivo para procesar el push
+        notification: {
+          channel_id: 'llamados', // canal HIGH creado por la app (heads-up)
+        },
       },
     },
   };
@@ -242,9 +248,14 @@ Deno.serve(async (req) => {
       title: content.title,
       body: content.body,
     };
+    // Bloque `notification` (lo muestra Android automáticamente en background).
+    const notification =
+      table === 'pedidos'
+        ? { title: `Nuevo pedido — ${ubicacion}`, body: 'Toca para ver' }
+        : { title: `Te llaman de ${ubicacion}`, body: 'Toca para atender' };
 
     const results = await Promise.all(
-      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data)),
+      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data, notification)),
     );
     const okCount = results.filter((r) => r.ok).length;
     // Resumen final del envío.
