@@ -106,6 +106,19 @@ export function PreferencesScreen() {
     }
   };
 
+  // Lectura de la info de OTA envuelta en try-catch: si cualquiera de estas
+  // propiedades lanza al evaluarse, no debe tumbar el render de la pantalla.
+  let otaDiagText: string;
+  try {
+    otaDiagText =
+      `updateId: ${Updates.updateId ?? '—'}\n` +
+      `createdAt: ${Updates.createdAt ? Updates.createdAt.toISOString() : '—'}\n` +
+      `isEmbeddedLaunch: ${String(Updates.isEmbeddedLaunch)}\n` +
+      `runtimeVersion: ${Updates.runtimeVersion ?? '—'} · canal: ${Updates.channel ?? '—'}`;
+  } catch {
+    otaDiagText = 'Error al leer info de OTA';
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -162,12 +175,7 @@ export function PreferencesScreen() {
           <>
             <Text style={[styles.seccion, { marginTop: 24 }]}>Actualizaciones</Text>
 
-            <Text style={styles.otaDiag}>
-              {`updateId: ${Updates.updateId ?? '—'}\n` +
-                `createdAt: ${Updates.createdAt ? Updates.createdAt.toISOString() : '—'}\n` +
-                `isEmbeddedLaunch: ${String(Updates.isEmbeddedLaunch)}\n` +
-                `runtimeVersion: ${Updates.runtimeVersion ?? '—'} · canal: ${Updates.channel ?? '—'}`}
-            </Text>
+            <Text style={styles.otaDiag}>{otaDiagText}</Text>
 
             {otaMsg ? <Text style={styles.otaMsg}>{otaMsg}</Text> : null}
 
