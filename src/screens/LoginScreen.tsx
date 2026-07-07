@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   botonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   version: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 34,
     alignSelf: 'center',
     fontSize: 11,
     color: '#333333',
