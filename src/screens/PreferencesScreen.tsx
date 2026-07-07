@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import * as Updates from 'expo-updates';
 import {
   getSoundPref,
   setSoundPref,
@@ -67,6 +68,44 @@ export function PreferencesScreen() {
     }
   };
 
+  // --- Actualizaciones OTA ---
+  const [otaMsg, setOtaMsg] = useState<string>('');
+  const [otaAvailable, setOtaAvailable] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [instalando, setInstalando] = useState(false);
+
+  const buscarUpdate = async () => {
+    if (buscando || instalando) return;
+    setBuscando(true);
+    setOtaMsg('Buscando actualización…');
+    try {
+      const r = await Updates.checkForUpdateAsync();
+      setOtaAvailable(r.isAvailable);
+      setOtaMsg(
+        r.isAvailable ? 'Hay una actualización disponible' : 'Ya tenés la versión más reciente',
+      );
+    } catch (e) {
+      setOtaAvailable(false);
+      setOtaMsg(`No se pudo buscar: ${String(e)}`);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const instalarUpdate = async () => {
+    if (!otaAvailable || instalando) return;
+    setInstalando(true);
+    setOtaMsg('Descargando actualización…');
+    try {
+      await Updates.fetchUpdateAsync();
+      setOtaMsg('Reiniciando…');
+      await Updates.reloadAsync();
+    } catch (e) {
+      setInstalando(false);
+      setOtaMsg(`No se pudo instalar: ${String(e)}`);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -118,6 +157,43 @@ export function PreferencesScreen() {
             </Pressable>
           );
         })}
+
+        {Updates.isEnabled ? (
+          <>
+            <Text style={[styles.seccion, { marginTop: 24 }]}>Actualizaciones</Text>
+            {otaMsg ? <Text style={styles.otaMsg}>{otaMsg}</Text> : null}
+
+            <Pressable
+              style={[styles.btn, styles.btnBuscar, (buscando || instalando) && styles.btnDisabled]}
+              onPress={buscarUpdate}
+              disabled={buscando || instalando}
+            >
+              {buscando ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>Buscar actualización</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.btn,
+                styles.btnInstalar,
+                (!otaAvailable || instalando) && styles.btnDisabled,
+              ]}
+              onPress={instalarUpdate}
+              disabled={!otaAvailable || instalando}
+            >
+              {instalando ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>
+                  {otaAvailable ? 'Instalar actualización' : 'No hay actualizaciones'}
+                </Text>
+              )}
+            </Pressable>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -126,6 +202,12 @@ export function PreferencesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f5f7' },
   container: { padding: 16 },
+  otaMsg: { fontSize: 14, color: '#444', marginBottom: 12 },
+  btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
+  btnBuscar: { backgroundColor: '#D4A017' },
+  btnInstalar: { backgroundColor: '#22A45A' },
+  btnDisabled: { opacity: 0.45 },
+  btnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   seccion: { fontSize: 14, fontWeight: '800', color: '#666', textTransform: 'uppercase', marginBottom: 6 },
   nota: { fontSize: 13, color: '#888', marginBottom: 16 },
   opcion: {
