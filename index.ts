@@ -4,6 +4,7 @@ import notifee, { EventType } from '@notifee/react-native';
 
 import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
+import { ensureChannels, CHANNEL_HEADSUP } from './src/lib/notifications';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
@@ -19,6 +20,22 @@ import App from './App';
  */
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   try {
+    // 🔎 DIAGNÓSTICO INCONDICIONAL: si esta notificación aparece, el handler SÍ
+    // se ejecutó con la app en segundo plano/cerrada. Si no aparece nada, el
+    // proceso estaba force-stopped (batería/OEM) y FCM no lo despertó — no es el
+    // código. (Se puede quitar una vez confirmado.)
+    try {
+      await ensureChannels();
+      await notifee.displayNotification({
+        title: 'BG handler OK',
+        body: JSON.stringify(remoteMessage.data ?? {}),
+        android: { channelId: CHANNEL_HEADSUP },
+      });
+    } catch (dbgErr) {
+      // eslint-disable-next-line no-console
+      console.error('[index] debug notification falló:', dbgErr);
+    }
+
     const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
     if (call) await displayIncomingCall(call);
   } catch (err) {
