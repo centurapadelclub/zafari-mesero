@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import notifee from '@notifee/react-native';
+import messaging from '@react-native-firebase/messaging';
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { PanelScreen } from '../screens/PanelScreen';
@@ -53,11 +54,28 @@ export function RootNavigator() {
     isOnboardingDone().then(setOnboardingDone);
   }, [session?.id]);
 
-  // Al abrir la app desde una notificación de llamada (Esc2, app cerrada),
-  // rutear a la pantalla de llamada entrante.
+  // Al abrir la app desde una notificación de llamada (app CERRADA/quit), rutear
+  // a la pantalla de llamada entrante. Cubrimos las dos fuentes posibles:
+  //  - notifee.getInitialNotification(): notificación mostrada por notifee
+  //    (FSI en foreground / snooze programado).
+  //  - messaging().getInitialNotification(): notificación del SISTEMA (bloque
+  //    `notification` de FCM) que el mesero tocó estando la app cerrada.
   const onReady = async () => {
-    const initial = await notifee.getInitialNotification();
-    const call = parseCallData(initial?.notification?.data as Record<string, unknown> | undefined);
+    let call = null;
+    try {
+      const initialNotifee = await notifee.getInitialNotification();
+      call = parseCallData(initialNotifee?.notification?.data as Record<string, unknown> | undefined);
+    } catch {
+      // ignorar
+    }
+    if (!call) {
+      try {
+        const initialFcm = await messaging().getInitialNotification();
+        call = parseCallData(initialFcm?.data as Record<string, unknown> | undefined);
+      } catch {
+        // ignorar
+      }
+    }
     if (call) navigateToIncomingCall(callToRoute(call));
   };
 
