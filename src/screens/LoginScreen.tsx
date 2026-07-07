@@ -41,6 +41,29 @@ export function LoginScreen() {
   const [meserosError, setMeserosError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Diagnóstico OTA visible: canal/runtimeVersion del build instalado + si hay
+  // update disponible. Sirve para detectar mismatch de channel (p. ej. build en
+  // "production" pero updates publicados en "preview") o runtimeVersion.
+  const [otaDiag, setOtaDiag] = useState('OTA: …');
+  useEffect(() => {
+    const base =
+      `OTA enabled=${String(Updates.isEnabled)} · canal=${Updates.channel ?? '—'}\n` +
+      `rtv=${Updates.runtimeVersion ?? '—'} · id=${Updates.updateId ? Updates.updateId.slice(0, 8) : 'embedded'}`;
+    setOtaDiag(base + '\nbuscando update…');
+    (async () => {
+      if (!Updates.isEnabled) {
+        setOtaDiag(base + '\n(Updates deshabilitado en este build)');
+        return;
+      }
+      try {
+        const r = await Updates.checkForUpdateAsync();
+        setOtaDiag(base + (r.isAvailable ? '\n✓ update DISPONIBLE' : '\n✗ sin update nuevo'));
+      } catch (e) {
+        setOtaDiag(base + `\nerror: ${String(e)}`);
+      }
+    })();
+  }, []);
+
   const cargarMeseros = async () => {
     setLoadingMeseros(true);
     setMeserosError(null);
@@ -155,7 +178,8 @@ export function LoginScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Versión de la app + número de update, discreto al fondo. */}
+      {/* Diagnóstico OTA (temporal) + versión de la app, discreto al fondo. */}
+      <Text style={styles.otaDiag}>{otaDiag}</Text>
       <Text style={styles.version}>{VERSION_TEXT}</Text>
 
       {/* Modal selector de nombre */}
@@ -242,6 +266,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     fontSize: 11,
     color: '#333333',
+  },
+  otaDiag: {
+    position: 'absolute',
+    bottom: 58,
+    alignSelf: 'center',
+    textAlign: 'center',
+    fontSize: 10,
+    color: '#555555',
+    fontVariant: ['tabular-nums'],
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
