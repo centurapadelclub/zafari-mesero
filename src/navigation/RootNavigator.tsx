@@ -12,21 +12,38 @@ import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
 import { isOnboardingDone } from '../lib/preferences';
-import { navigationRef, navigateToIncomingCall } from './navigationRef';
+import { navigationRef } from './navigationRef';
 import { callToRoute, parseCallData } from '../lib/incomingCall';
 import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+type CallRoute = RootStackParamList['IncomingCall'];
 
 const navTheme = {
   ...DefaultTheme,
   colors: { ...DefaultTheme.colors, background: colors.bg },
 };
 
-function AppStack({ onboardingDone }: { onboardingDone: boolean }) {
+function AppStack({
+  onboardingDone,
+  initialCall,
+}: {
+  onboardingDone: boolean;
+  initialCall: CallRoute | null;
+}) {
+  // Si la app se abrió tocando una notificación de llamada/pedido, arrancamos
+  // DIRECTO en IncomingCallScreen (con sus params) en vez de navegar tarde desde
+  // onReady — que se perdía en la carrera con el render de la ruta inicial.
+  const initialRouteName: keyof RootStackParamList = initialCall
+    ? 'IncomingCall'
+    : onboardingDone
+      ? 'Tabs'
+      : 'Onboarding';
+
   return (
     <Stack.Navigator
-      initialRouteName={onboardingDone ? 'Tabs' : 'Onboarding'}
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.gold,
@@ -40,6 +57,7 @@ function AppStack({ onboardingDone }: { onboardingDone: boolean }) {
       <Stack.Screen
         name="IncomingCall"
         component={IncomingCallScreen}
+        initialParams={initialCall ?? undefined}
         options={{ headerShown: false, presentation: 'fullScreenModal', gestureEnabled: false }}
       />
     </Stack.Navigator>
@@ -49,37 +67,42 @@ function AppStack({ onboardingDone }: { onboardingDone: boolean }) {
 export function RootNavigator() {
   const { session, loading } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  // undefined = todavía resolviendo la notificación inicial; null = no hubo.
+  const [initialCall, setInitialCall] = useState<CallRoute | null | undefined>(undefined);
 
   useEffect(() => {
     isOnboardingDone().then(setOnboardingDone);
   }, [session?.id]);
 
-  // Al abrir la app desde una notificación de llamada (app CERRADA/quit), rutear
-  // a la pantalla de llamada entrante. Cubrimos las dos fuentes posibles:
-  //  - notifee.getInitialNotification(): notificación mostrada por notifee
-  //    (FSI en foreground / snooze programado).
-  //  - messaging().getInitialNotification(): notificación del SISTEMA (bloque
-  //    `notification` de FCM) que el mesero tocó estando la app cerrada.
-  const onReady = async () => {
-    let call = null;
-    try {
-      const initialNotifee = await notifee.getInitialNotification();
-      call = parseCallData(initialNotifee?.notification?.data as Record<string, unknown> | undefined);
-    } catch {
-      // ignorar
-    }
-    if (!call) {
+  // Resolvemos la notificación que abrió la app (app CERRADA/quit) ANTES de
+  // renderizar el stack, para poder usarla como ruta inicial. Cubrimos las dos
+  // fuentes: notifee (FSI/snooze) y FCM del sistema (bloque `notification`).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let call = null;
       try {
-        const initialFcm = await messaging().getInitialNotification();
-        call = parseCallData(initialFcm?.data as Record<string, unknown> | undefined);
+        const n = await notifee.getInitialNotification();
+        call = parseCallData(n?.notification?.data as Record<string, unknown> | undefined);
       } catch {
         // ignorar
       }
-    }
-    if (call) navigateToIncomingCall(callToRoute(call));
-  };
+      if (!call) {
+        try {
+          const f = await messaging().getInitialNotification();
+          call = parseCallData(f?.data as Record<string, unknown> | undefined);
+        } catch {
+          // ignorar
+        }
+      }
+      if (!cancelled) setInitialCall(call ? callToRoute(call) : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  if (loading || (session && onboardingDone === null)) {
+  if (loading || (session && onboardingDone === null) || initialCall === undefined) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={colors.gold} />
@@ -88,8 +111,12 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={onReady}>
-      {session ? <AppStack onboardingDone={!!onboardingDone} /> : <LoginScreen />}
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
+      {session ? (
+        <AppStack onboardingDone={!!onboardingDone} initialCall={initialCall} />
+      ) : (
+        <LoginScreen />
+      )}
     </NavigationContainer>
   );
 }
