@@ -106,19 +106,6 @@ export function PreferencesScreen() {
     }
   };
 
-  // Lectura de la info de OTA envuelta en try-catch: si cualquiera de estas
-  // propiedades lanza al evaluarse, no debe tumbar el render de la pantalla.
-  let otaDiagText: string;
-  try {
-    otaDiagText =
-      `updateId: ${Updates.updateId ?? '—'}\n` +
-      `createdAt: ${Updates.createdAt ? Updates.createdAt.toISOString() : '—'}\n` +
-      `isEmbeddedLaunch: ${String(Updates.isEmbeddedLaunch)}\n` +
-      `runtimeVersion: ${Updates.runtimeVersion ?? '—'} · canal: ${Updates.channel ?? '—'}`;
-  } catch {
-    otaDiagText = 'Error al leer info de OTA';
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -174,9 +161,6 @@ export function PreferencesScreen() {
         {Updates.isEnabled ? (
           <>
             <Text style={[styles.seccion, { marginTop: 24 }]}>Actualizaciones</Text>
-
-            <Text style={styles.otaDiag}>{otaDiagText}</Text>
-
             {otaMsg ? <Text style={styles.otaMsg}>{otaMsg}</Text> : null}
 
             <Pressable
@@ -218,13 +202,6 @@ export function PreferencesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f5f7' },
   container: { padding: 16 },
-  otaDiag: {
-    fontSize: 12,
-    color: '#555',
-    marginBottom: 12,
-    fontVariant: ['tabular-nums'],
-    lineHeight: 18,
-  },
   otaMsg: { fontSize: 14, color: '#444', marginBottom: 12 },
   btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
   btnBuscar: { backgroundColor: '#D4A017' },

@@ -17,16 +17,17 @@ import {
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 
 export default function App() {
-  // Al abrir la app: buscar y aplicar el OTA automáticamente. Solo corre en
-  // builds con updates habilitado (en dev/Expo Go se omite para no hacer ruido).
+  // Al abrir la app: buscar y DESCARGAR el OTA, pero NO reiniciar en caliente.
+  // El update descargado se aplica solo en el SIGUIENTE arranque natural de la
+  // app. Así evitamos el ciclo de crash (descargar -> reload -> crash -> rollback)
+  // si un bundle sale defectuoso. Solo corre en builds con updates habilitado.
   useEffect(() => {
     async function checkUpdate() {
       if (!Updates.isEnabled) return;
       try {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
+          await Updates.fetchUpdateAsync(); // queda listo para el próximo arranque
         }
       } catch (e) {
         // eslint-disable-next-line no-console
