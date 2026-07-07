@@ -14,12 +14,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
+const APP_VERSION = '1.0.1';
 const UPDATE_ID = Updates.updateId ? Updates.updateId.slice(0, 8) : 'dev';
 const VERSION_TEXT = `v${APP_VERSION} · update ${UPDATE_ID}`;
 
