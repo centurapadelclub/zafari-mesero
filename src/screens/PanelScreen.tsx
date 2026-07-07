@@ -20,8 +20,7 @@ import { PedidoHistorialRow, LlamadoHistorialRow } from '../components/Historial
 import { NotificacionesBanner } from '../components/NotificacionesBanner';
 import { PulsoFooter } from '../components/PulsoFooter';
 import { colors } from '../theme';
-import { requestNotificationPermissions, peekFcmToken } from '../lib/notifications';
-import { getPushDiag, subscribePushDiag } from '../lib/pushDiag';
+import { requestNotificationPermissions } from '../lib/notifications';
 import { Id, Pedido, PedidoItem, RootStackParamList } from '../types/db';
 
 type Tab = 'llamados' | 'pedidos';
@@ -52,18 +51,10 @@ export function PanelScreen() {
 
   const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
-  const [fcmToken, setFcmToken] = useState<string | null>(null);
-  const [pushDiag, setPushDiagState] = useState<string>(getPushDiag());
 
   useEffect(() => {
-    (async () => {
-      await requestNotificationPermissions();
-      setFcmToken(await peekFcmToken());
-    })();
+    requestNotificationPermissions();
   }, []);
-
-  // Diagnóstico visible del registro del token en push_tokens.
-  useEffect(() => subscribePushDiag(setPushDiagState), []);
 
   // Deep-link desde la pantalla de pedido entrante ("Ver pedido"): cambia a la
   // pestaña Pedidos y abre el detalle de ese pedido específico.
@@ -226,11 +217,6 @@ export function PanelScreen() {
             busyId={busyId}
           />
         )}
-
-        <Text style={styles.fcmDebug}>
-          {fcmToken ? `FCM: ${fcmToken.slice(0, 20)}…` : 'FCM: sin token (emulador o permiso denegado)'}
-        </Text>
-        {pushDiag ? <Text style={styles.pushDiag}>{pushDiag}</Text> : null}
 
         <PulsoFooter />
       </ScrollView>
@@ -445,23 +431,4 @@ const styles = StyleSheet.create({
   histPillText: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
   empty: { color: colors.textMuted, textAlign: 'center', marginVertical: 24, fontSize: 15 },
   emptySmall: { color: colors.textMuted, textAlign: 'center', marginVertical: 12, fontSize: 14 },
-  fcmDebug: {
-    color: colors.textMuted,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 16,
-    fontVariant: ['tabular-nums'],
-  },
-  pushDiag: {
-    color: colors.textDim,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 8,
-    marginHorizontal: 16,
-    padding: 8,
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
 });
