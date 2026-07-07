@@ -161,6 +161,14 @@ export function PreferencesScreen() {
         {Updates.isEnabled ? (
           <>
             <Text style={[styles.seccion, { marginTop: 24 }]}>Actualizaciones</Text>
+
+            <Text style={styles.otaDiag}>
+              {`updateId: ${Updates.updateId ?? '—'}\n` +
+                `createdAt: ${Updates.createdAt ? Updates.createdAt.toISOString() : '—'}\n` +
+                `isEmbeddedLaunch: ${String(Updates.isEmbeddedLaunch)}\n` +
+                `runtimeVersion: ${Updates.runtimeVersion ?? '—'} · canal: ${Updates.channel ?? '—'}`}
+            </Text>
+
             {otaMsg ? <Text style={styles.otaMsg}>{otaMsg}</Text> : null}
 
             <Pressable
@@ -202,6 +210,13 @@ export function PreferencesScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f5f7' },
   container: { padding: 16 },
+  otaDiag: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 12,
+    fontVariant: ['tabular-nums'],
+    lineHeight: 18,
+  },
   otaMsg: { fontSize: 14, color: '#444', marginBottom: 12 },
   btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
   btnBuscar: { backgroundColor: '#D4A017' },
