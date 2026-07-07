@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
@@ -51,15 +52,27 @@ export function LoginScreen() {
       `rtv=${Updates.runtimeVersion ?? '—'} · id=${Updates.updateId ? Updates.updateId.slice(0, 8) : 'embedded'}`;
     setOtaDiag(base + '\nbuscando update…');
     (async () => {
+      // Marca del último background handler (la deja index.ts). Prueba si el
+      // handler FCM se ejecutó, independiente del permiso de notificaciones.
+      let bgLine = '\nBG: nunca corrió';
+      try {
+        const raw = await AsyncStorage.getItem('zafari.debug.lastBg');
+        if (raw) {
+          const { t } = JSON.parse(raw) as { t?: string };
+          bgLine = `\nBG último: ${t ?? '?'}`;
+        }
+      } catch {
+        // ignorar
+      }
       if (!Updates.isEnabled) {
-        setOtaDiag(base + '\n(Updates deshabilitado en este build)');
+        setOtaDiag(base + bgLine + '\n(Updates deshabilitado en este build)');
         return;
       }
       try {
         const r = await Updates.checkForUpdateAsync();
-        setOtaDiag(base + (r.isAvailable ? '\n✓ update DISPONIBLE' : '\n✗ sin update nuevo'));
+        setOtaDiag(base + bgLine + (r.isAvailable ? '\n✓ update DISPONIBLE' : '\n✗ sin update nuevo'));
       } catch (e) {
-        setOtaDiag(base + `\nerror: ${String(e)}`);
+        setOtaDiag(base + bgLine + `\nerror: ${String(e)}`);
       }
     })();
   }, []);

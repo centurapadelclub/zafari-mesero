@@ -1,6 +1,7 @@
 import { registerRootComponent } from 'expo';
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
@@ -20,10 +21,21 @@ import App from './App';
  */
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   try {
-    // 🔎 DIAGNÓSTICO INCONDICIONAL: si esta notificación aparece, el handler SÍ
-    // se ejecutó con la app en segundo plano/cerrada. Si no aparece nada, el
-    // proceso estaba force-stopped (batería/OEM) y FCM no lo despertó — no es el
-    // código. (Se puede quitar una vez confirmado.)
+    // 🔎 PRUEBA 1 (NO depende del permiso de notificaciones): dejamos una marca
+    // con timestamp en AsyncStorage. Si el handler corrió, el login la muestra
+    // la próxima vez que abrís la app — aunque la notificación no se vea.
+    try {
+      await AsyncStorage.setItem(
+        'zafari.debug.lastBg',
+        JSON.stringify({ t: new Date().toISOString(), data: remoteMessage.data ?? null }),
+      );
+    } catch {
+      // ignorar
+    }
+
+    // 🔎 PRUEBA 2 (depende de POST_NOTIFICATIONS): notificación incondicional.
+    // Si aparece, el handler corrió Y hay permiso. Si NO aparece pero la marca
+    // de arriba sí actualizó, el handler corrió pero falta permiso/canal.
     try {
       await ensureChannels();
       await notifee.displayNotification({
