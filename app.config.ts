@@ -80,6 +80,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // activa showWhenLocked en MainActivity.onCreate solo si el keyguard está
     // bloqueado. El JS lo desactiva al cerrar la pantalla de llamada.
     './plugins/withIncomingCallActivity',
+    // Declara foregroundServiceType="connectedDevice" en el service de notifee
+    // (evita MissingForegroundServiceTypeException en Android 14+).
+    './plugins/withForegroundServiceType',
     // Splash screen: logo de Zafari sobre fondo oscuro.
     [
       'expo-splash-screen',
