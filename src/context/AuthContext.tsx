@@ -1,7 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import { deletePushToken, savePushToken } from '../lib/notifications';
+import {
+  deletePushToken,
+  savePushToken,
+  startForegroundService,
+  stopForegroundService,
+} from '../lib/notifications';
 import { clearOnboarding } from '../lib/preferences';
 import { Id, Mesero } from '../types/db';
 
@@ -105,6 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (session?.id != null) {
       savePushToken(session.id);
+      // Foreground Service: mantener el proceso vivo para recibir llamados
+      // aunque la app esté en segundo plano (estilo WhatsApp).
+      startForegroundService();
     }
   }, [session?.id]);
 
@@ -172,6 +180,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Detener el Foreground Service: deslogueado no debe quedar corriendo.
+    await stopForegroundService();
     // Esc1: borrar el token de este dispositivo ANTES de limpiar la sesión,
     // para que no le lleguen más notificaciones estando deslogueado.
     const raw = await AsyncStorage.getItem(STORAGE_KEY);

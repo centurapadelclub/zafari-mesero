@@ -27,6 +27,19 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   }
 });
 
+/**
+ * Runner del Foreground Service (notifee lo exige registrado a nivel global).
+ * Mantiene el servicio vivo hasta stopForegroundService(); el trabajo real de los
+ * push lo hace el setBackgroundMessageHandler de arriba, así que la promesa no
+ * resuelve por sí sola.
+ */
+try {
+  notifee.registerForegroundService(() => new Promise(() => {}));
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('[index] registerForegroundService no disponible:', err);
+}
+
 // Capturar errores JS no atrapados (los logea en vez de cerrar en silencio).
 installGlobalErrorHandler();
 

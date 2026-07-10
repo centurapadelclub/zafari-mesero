@@ -54,6 +54,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'android.permission.SYSTEM_ALERT_WINDOW', // Esc2: mostrar sobre otras apps
       'android.permission.RECEIVE_BOOT_COMPLETED',
       'android.permission.SCHEDULE_EXACT_ALARM', // Snooze: reprogramar la llamada exactamente a los 30 s
+      'android.permission.FOREGROUND_SERVICE', // servicio en segundo plano (proceso siempre vivo)
+      'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE', // tipo del foreground service (Android 14+)
     ],
   },
   web: {

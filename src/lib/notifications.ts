@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import notifee, {
   AndroidImportance,
   AndroidVisibility,
+  AndroidForegroundServiceType,
   AuthorizationStatus,
 } from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
@@ -30,6 +31,9 @@ import { setPushDiag } from './pushDiag';
 export const CHANNEL_HEADSUP = 'llamados-v2'; // Esc3
 export const CHANNEL_CALL_SOUND = 'llamado-call-sound-v2'; // Esc2 con sonido
 export const CHANNEL_CALL_SILENT = 'llamado-call-silent-v2'; // Esc2 solo vibración
+// Canal del Foreground Service: baja importancia, discreto, sin sonido/vibración.
+export const CHANNEL_FGS = 'zafari-fgs'; // notificación persistente "app activa"
+const FGS_NOTIFICATION_ID = 'zafari-foreground-service';
 
 // ---- Patrones de vibración ----
 // Esc3: corto, una sola vez ("brr brr").
@@ -77,9 +81,77 @@ export async function ensureChannels(): Promise<void> {
       vibrationPattern: PATTERN_CHANNEL,
       bypassDnd: true,
     });
+
+    // Canal del Foreground Service: baja importancia, discreto (sin sonido ni
+    // vibración) para la notificación persistente "Zafari Mesero activo".
+    await notifee.createChannel({
+      id: CHANNEL_FGS,
+      name: 'Servicio en segundo plano',
+      importance: AndroidImportance.LOW,
+      visibility: AndroidVisibility.PUBLIC,
+      vibration: false,
+    });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[notifications] no se pudieron crear los canales (notifee):', err);
+  }
+}
+
+/**
+ * Arranca el Foreground Service (estilo WhatsApp): mantiene el proceso vivo para
+ * que el setBackgroundMessageHandler procese siempre los push FCM data-only y
+ * pueda mostrar la pantalla de llamada completa. Muestra una notificación
+ * persistente discreta en el canal de baja importancia. Idempotente.
+ */
+export async function startForegroundService(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await ensureChannels();
+    await notifee.displayNotification({
+      id: FGS_NOTIFICATION_ID,
+      title: 'Zafari Mesero activo',
+      body: 'Escuchando llamados y pedidos',
+      android: {
+        channelId: CHANNEL_FGS,
+        asForegroundService: true,
+        ongoing: true,
+        smallIcon: 'ic_launcher',
+        importance: AndroidImportance.LOW,
+        // Android 14+: tipo de servicio (coincide con el permiso declarado).
+        foregroundServiceTypes: [
+          AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+        ],
+        pressAction: { id: 'default' },
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[notifications] no se pudo iniciar el foreground service:', err);
+  }
+}
+
+/** Detiene el Foreground Service (al desloguear). */
+export async function stopForegroundService(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await notifee.stopForegroundService();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[notifications] no se pudo detener el foreground service:', err);
+  }
+}
+
+/**
+ * Abre los ajustes del "administrador de energía"/optimización de batería del
+ * fabricante, para que el mesero excluya la app y no la mate en segundo plano.
+ */
+export async function openPowerManagerSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await notifee.openPowerManagerSettings();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[notifications] openPowerManagerSettings falló:', err);
   }
 }
 

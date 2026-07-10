@@ -4,7 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { setOnboardingDone } from '../lib/preferences';
-import { requestNotificationPermissions, requestExactAlarmPermission } from '../lib/notifications';
+import {
+  requestNotificationPermissions,
+  requestExactAlarmPermission,
+  openPowerManagerSettings,
+} from '../lib/notifications';
 
 const APP_PACKAGE = 'com.zafari.mesero';
 
@@ -81,6 +85,16 @@ export function OnboardingScreen() {
         </Text>
         <Pressable style={styles.botonSecundario} onPress={() => requestExactAlarmPermission()}>
           <Text style={styles.botonSecundarioText}>Permitir alarmas exactas (snooze)</Text>
+        </Pressable>
+
+        <Text style={styles.intro}>
+          Zafari Mesero corre <Text style={styles.bold}>en segundo plano</Text> para avisarte de los
+          llamados aunque no tengas la app abierta. Para que el sistema no la cierre, excluíla de la{' '}
+          <Text style={styles.bold}>optimización de batería</Text> (buscá "Sin restricciones" o
+          "No optimizar").
+        </Text>
+        <Pressable style={styles.botonSecundario} onPress={() => openPowerManagerSettings()}>
+          <Text style={styles.botonSecundarioText}>Excluir de optimización de batería</Text>
         </Pressable>
 
         <Pressable style={styles.botonSecundario} onPress={continuar}>
