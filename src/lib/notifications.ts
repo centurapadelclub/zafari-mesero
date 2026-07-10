@@ -34,6 +34,8 @@ const PATTERN_SHORT = [0, 250, 150, 250];
 // Esc2: tipo llamada telefónica, fuerte-suave, repetido (se corta a los 10 s).
 const PATTERN_CALL = [0, 800, 300, 500, 300];
 const CALL_VIBRATION_MAX_MS = 10000;
+// Patrón del CANAL de notifee: 0 ms de pausa + 3000 ms de vibración fuerte.
+const PATTERN_CHANNEL = [0, 3000];
 
 /**
  * Crea/actualiza los canales de notificación (todo con notifee). Idempotente.
@@ -49,7 +51,7 @@ export async function ensureChannels(): Promise<void> {
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
       vibration: true,
-      vibrationPattern: PATTERN_SHORT,
+      vibrationPattern: PATTERN_CHANNEL,
     });
 
     // Esc2: canales para la llamada entrante (Full Screen Intent lo arma notifee).
@@ -60,7 +62,7 @@ export async function ensureChannels(): Promise<void> {
       visibility: AndroidVisibility.PUBLIC,
       sound: 'default',
       vibration: true,
-      vibrationPattern: PATTERN_CALL,
+      vibrationPattern: PATTERN_CHANNEL,
       bypassDnd: true,
     });
     await notifee.createChannel({
@@ -69,7 +71,7 @@ export async function ensureChannels(): Promise<void> {
       importance: AndroidImportance.HIGH,
       visibility: AndroidVisibility.PUBLIC,
       vibration: true,
-      vibrationPattern: PATTERN_CALL,
+      vibrationPattern: PATTERN_CHANNEL,
       bypassDnd: true,
     });
   } catch (err) {
