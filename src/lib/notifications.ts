@@ -24,9 +24,12 @@ import { setPushDiag } from './pushDiag';
  */
 
 // ---- Canales ----
-export const CHANNEL_HEADSUP = 'llamados'; // Esc3
-export const CHANNEL_CALL_SOUND = 'llamado-call-sound'; // Esc2 con sonido
-export const CHANNEL_CALL_SILENT = 'llamado-call-silent'; // Esc2 solo vibración
+// Sufijo -v2: los canales de Android son inmutables una vez creados. Al cambiar
+// el id, Android crea canales NUEVOS con el vibrationPattern nuevo ([0,3000])
+// sin necesidad de reinstalar la app.
+export const CHANNEL_HEADSUP = 'llamados-v2'; // Esc3
+export const CHANNEL_CALL_SOUND = 'llamado-call-sound-v2'; // Esc2 con sonido
+export const CHANNEL_CALL_SILENT = 'llamado-call-silent-v2'; // Esc2 solo vibración
 
 // ---- Patrones de vibración ----
 // Esc3: corto, una sola vez ("brr brr").
