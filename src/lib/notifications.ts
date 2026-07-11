@@ -98,13 +98,22 @@ export async function ensureChannels(): Promise<void> {
 }
 
 /**
+ * Flag de seguridad: el Foreground Service arranca un service nativo que en
+ * Android 14 puede lanzar una excepción NO atrapable por JS (crash del proceso
+ * en <1s, en bucle) si el foregroundServiceType no está bien declarado. Lo
+ * dejamos APAGADO hasta verificar en un build que el manifest quedó correcto.
+ * Prendé esto (true) recién cuando confirmes que el service arranca sin crashear.
+ */
+const FGS_ENABLED = false;
+
+/**
  * Arranca el Foreground Service (estilo WhatsApp): mantiene el proceso vivo para
  * que el setBackgroundMessageHandler procese siempre los push FCM data-only y
  * pueda mostrar la pantalla de llamada completa. Muestra una notificación
  * persistente discreta en el canal de baja importancia. Idempotente.
  */
 export async function startForegroundService(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || !FGS_ENABLED) return;
   try {
     await ensureChannels();
     await notifee.displayNotification({
