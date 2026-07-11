@@ -34,7 +34,15 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
  * resuelve por sí sola.
  */
 try {
-  notifee.registerForegroundService(() => new Promise(() => {}));
+  notifee.registerForegroundService(
+    () =>
+      new Promise(() => {
+        // keep-alive: el runner vive hasta stopForegroundService(). No hace
+        // trabajo propio (el bg handler procesa los push). Si en el futuro se
+        // agrega lógica acá, debe ir envuelta en try-catch para no matar el
+        // service.
+      }),
+  );
 } catch (err) {
   // eslint-disable-next-line no-console
   console.error('[index] registerForegroundService no disponible:', err);

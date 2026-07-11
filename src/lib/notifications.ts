@@ -98,13 +98,11 @@ export async function ensureChannels(): Promise<void> {
 }
 
 /**
- * Flag de seguridad: el Foreground Service arranca un service nativo que en
- * Android 14 puede lanzar una excepción NO atrapable por JS (crash del proceso
- * en <1s, en bucle) si el foregroundServiceType no está bien declarado. Lo
- * dejamos APAGADO hasta verificar en un build que el manifest quedó correcto.
- * Prendé esto (true) recién cuando confirmes que el service arranca sin crashear.
+ * Flag del Foreground Service. Manifest verificado (el service de notifee tiene
+ * android:foregroundServiceType="connectedDevice"), así que queda ACTIVO. Se
+ * arranca con delay + try-catch robusto para dar margen a que notifee inicialice.
  */
-const FGS_ENABLED = false;
+const FGS_ENABLED = true;
 
 /**
  * Arranca el Foreground Service (estilo WhatsApp): mantiene el proceso vivo para
@@ -114,8 +112,18 @@ const FGS_ENABLED = false;
  */
 export async function startForegroundService(): Promise<void> {
   if (Platform.OS !== 'android' || !FGS_ENABLED) return;
+
+  // El canal se crea aparte para que un fallo acá no impida intentar el display.
   try {
     await ensureChannels();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[notifications] ensureChannels (fgs) falló:', err);
+  }
+
+  // Envoltura robusta del display del FGS: cualquier error (incluido el arranque
+  // del service nativo) queda logueado y NO tumba el flujo de login.
+  try {
     await notifee.displayNotification({
       id: FGS_NOTIFICATION_ID,
       title: 'Zafari Mesero activo',

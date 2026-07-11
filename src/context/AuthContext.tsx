@@ -108,12 +108,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Registrar/actualizar el token FCM cuando hay un mesero logueado
   // (cubre tanto el login como la restauración de sesión al reabrir la app).
   useEffect(() => {
-    if (session?.id != null) {
-      savePushToken(session.id);
-      // Foreground Service: mantener el proceso vivo para recibir llamados
-      // aunque la app esté en segundo plano (estilo WhatsApp).
+    if (session?.id == null) return;
+    savePushToken(session.id);
+    // Foreground Service: mantener el proceso vivo para recibir llamados aunque
+    // la app esté en segundo plano (estilo WhatsApp). Delay de 500 ms para dar
+    // tiempo a que notifee termine de inicializarse antes de arrancar el service.
+    const t = setTimeout(() => {
       startForegroundService();
-    }
+    }, 500);
+    return () => clearTimeout(t);
   }, [session?.id]);
 
   // Recalcular las zonas cada vez que hay sesión (login o restauración). Así, si
