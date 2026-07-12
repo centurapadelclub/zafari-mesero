@@ -34,6 +34,11 @@
       "autoIncrement": true,
       "channel": "production",
       "distribution": "store",
+      "updates": {
+        "fingerprint": {
+          "enabled": false
+        }
+      },
       "android": {
         "buildType": "app-bundle"
       },
