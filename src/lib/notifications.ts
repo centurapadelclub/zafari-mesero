@@ -25,7 +25,7 @@ import { setPushDiag } from './pushDiag';
  */
 
 // ---- Canales ----
-// Sufijo -v2: los canales de Android son inmutables una vez creados. Al cambiar
+// Sufijo -v3: los canales de Android son inmutables una vez creados. Al cambiar
 // el id, Android crea canales NUEVOS con el vibrationPattern nuevo ([0,3000])
 // sin necesidad de reinstalar la app.
 export const CHANNEL_HEADSUP = 'llamados-v3'; // Esc3
