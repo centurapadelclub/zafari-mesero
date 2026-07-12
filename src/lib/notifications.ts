@@ -28,9 +28,9 @@ import { setPushDiag } from './pushDiag';
 // Sufijo -v2: los canales de Android son inmutables una vez creados. Al cambiar
 // el id, Android crea canales NUEVOS con el vibrationPattern nuevo ([0,3000])
 // sin necesidad de reinstalar la app.
-export const CHANNEL_HEADSUP = 'llamados-v2'; // Esc3
-export const CHANNEL_CALL_SOUND = 'llamado-call-sound-v2'; // Esc2 con sonido
-export const CHANNEL_CALL_SILENT = 'llamado-call-silent-v2'; // Esc2 solo vibración
+export const CHANNEL_HEADSUP = 'llamados-v3'; // Esc3
+export const CHANNEL_CALL_SOUND = 'llamado-call-sound-v3'; // Esc2 con sonido
+export const CHANNEL_CALL_SILENT = 'llamado-call-silent-v3'; // Esc2 solo vibración
 // Canal del Foreground Service: baja importancia, discreto, sin sonido/vibración.
 export const CHANNEL_FGS = 'zafari-fgs'; // notificación persistente "app activa"
 const FGS_NOTIFICATION_ID = 'zafari-foreground-service';
