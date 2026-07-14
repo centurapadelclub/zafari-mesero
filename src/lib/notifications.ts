@@ -102,7 +102,7 @@ export async function ensureChannels(): Promise<void> {
  * android:foregroundServiceType="connectedDevice"), así que queda ACTIVO. Se
  * arranca con delay + try-catch robusto para dar margen a que notifee inicialice.
  */
-const FGS_ENABLED = true;
+const FGS_ENABLED = false;
 
 /**
  * Arranca el Foreground Service (estilo WhatsApp): mantiene el proceso vivo para
