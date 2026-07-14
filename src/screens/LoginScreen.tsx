@@ -17,7 +17,7 @@ import * as Updates from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 const UPDATE_ID = Updates.updateId ? Updates.updateId.slice(0, 8) : 'dev';
 const VERSION_TEXT = `v${APP_VERSION} · update ${UPDATE_ID}`;
 
