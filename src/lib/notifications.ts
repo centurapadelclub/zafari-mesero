@@ -42,7 +42,10 @@ const PATTERN_SHORT = [0, 250, 150, 250];
 const PATTERN_CALL = [0, 800, 300, 500, 300];
 const CALL_VIBRATION_MAX_MS = 10000;
 // Patrón del CANAL de notifee: 0 ms de pausa + 3000 ms de vibración fuerte.
-const PATTERN_CHANNEL = [0, 3000];
+// notifee exige valores POSITIVOS en vibrationPattern (el 0 rompe createChannel:
+// "expected an array containing an even number of positive values"). Por eso el
+// patrón del canal arranca en 500 (espera) + 3000 (vibración), no en 0.
+const PATTERN_CHANNEL = [500, 3000];
 
 /**
  * Crea/actualiza los canales de notificación (todo con notifee). Idempotente.
