@@ -105,7 +105,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Se leen acá en tiempo de build (cuando las env de EAS están presentes) y
     // quedan disponibles en runtime vía Constants.expoConfig.extra — más robusto
     // que depender solo del inlining de process.env en el bundle nativo.
-    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
-    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
+    // Fallback a los valores públicos reales (NO null): así el manifest del OTA
+    // siempre trae el string aunque process.env no esté presente en el publish
+    // (eas update no usa el env de eas.json, y una var "secret" saldría como {}).
+    // La URL y la anon publishable key son públicas (ya están en eas.json / bundle).
+    supabaseUrl:
+      process.env.EXPO_PUBLIC_SUPABASE_URL ?? 'https://uongnbktkghwkkwllcxa.supabase.co',
+    supabaseAnonKey:
+      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? 'sb_publishable_gucs-SiKSWwcN6yzBPriHg_XJ2tCb6k',
   },
 });
