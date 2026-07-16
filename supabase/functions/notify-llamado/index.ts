@@ -131,22 +131,20 @@ function buildContent(table: string, record: Record<string, unknown>) {
   };
 }
 
-// ---- Envío FCM v1 (mensaje HÍBRIDO notification + data, alta prioridad) ----
-// notification: Android lo muestra automáticamente en la barra cuando la app
-//   está en segundo plano / cerrada (garantiza que SIEMPRE se vea el aviso).
-// data: se mantiene igual para que la app procese la llamada (Full Screen Intent
-//   / heads-up) cuando está abierta (onMessage) o al tocar la notificación.
+// ---- Envío FCM v1 (mensaje DATA-only de alta prioridad) ----
+// SIN bloque `notification`: así Android NO muestra nada por su cuenta y el push
+// llega al setBackgroundMessageHandler, que con notifee arma el Full Screen
+// Intent (Esc2) / heads-up (Esc3). notifee es el ÚNICO que muestra la notif
+// (evita la doble notificación: sistema + notifee).
 async function sendFcm(
   accessToken: string,
   projectId: string,
   token: string,
   data: Record<string, string>,
-  notification: { title: string; body: string },
 ): Promise<{ ok: boolean; status: number }> {
   const message = {
     message: {
       token,
-      notification, // { title, body } — mostrado por el sistema en background
       data,
       android: {
         priority: 'high', // despierta el dispositivo para procesar el push
@@ -248,14 +246,9 @@ Deno.serve(async (req) => {
       title: content.title,
       body: content.body,
     };
-    // Bloque `notification` (lo muestra Android automáticamente en background).
-    const notification =
-      table === 'pedidos'
-        ? { title: `Nuevo pedido — ${ubicacion}`, body: 'Toca para ver' }
-        : { title: `Te llaman de ${ubicacion}`, body: 'Toca para atender' };
 
     const results = await Promise.all(
-      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data, notification)),
+      tokens.map((t) => sendFcm(accessToken, sa.project_id, t.token, data)),
     );
     const okCount = results.filter((r) => r.ok).length;
     // Resumen final del envío.
