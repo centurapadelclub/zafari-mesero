@@ -11,6 +11,7 @@ import {
   setTonePref,
   TonePref,
 } from '../lib/preferences';
+import { canUseFullScreenIntent, openFullScreenIntentSettings } from '../../modules/lock-screen';
 
 const OPCIONES: { value: SoundPref; titulo: string; desc: string; icon: string }[] = [
   {
@@ -44,9 +45,21 @@ export function PreferencesScreen() {
   const [tono, setTono] = useState<TonePref | null>(null);
   const preview = useAudioPlayer(TONE_SOURCES.timbre);
 
+  // Estado real del permiso de Full Screen Intent (Android 14+). true/false, o
+  // null si no se pudo leer (build sin el módulo nativo). Todo en try-catch.
+  const [fsi, setFsi] = useState<boolean | null>(null);
+  const leerFsi = () => {
+    try {
+      setFsi(canUseFullScreenIntent());
+    } catch {
+      setFsi(null);
+    }
+  };
+
   useEffect(() => {
     getSoundPref().then(setPref);
     getTonePref().then(setTono);
+    leerFsi();
   }, []);
 
   const elegir = async (value: SoundPref) => {
@@ -158,6 +171,41 @@ export function PreferencesScreen() {
           );
         })}
 
+        <Text style={[styles.seccion, { marginTop: 24 }]}>Pantalla completa (llamadas)</Text>
+        <Text style={styles.nota}>
+          En Android 14+ este permiso hace falta para que el llamado abra la pantalla completa
+          automáticamente (aunque el celular esté bloqueado).
+        </Text>
+        <Text
+          style={[
+            styles.fsiEstado,
+            fsi === true ? styles.fsiOk : fsi === false ? styles.fsiBad : styles.fsiUnknown,
+          ]}
+        >
+          {fsi === true
+            ? 'Estado: PERMITIDO ✅'
+            : fsi === false
+              ? 'Estado: BLOQUEADO ❌'
+              : 'Estado: no disponible en este build'}
+        </Text>
+        {fsi === false ? (
+          <Pressable
+            style={[styles.btn, styles.btnBuscar]}
+            onPress={() => {
+              try {
+                openFullScreenIntentSettings();
+              } catch {
+                // no-op
+              }
+            }}
+          >
+            <Text style={styles.btnText}>Permitir pantalla completa</Text>
+          </Pressable>
+        ) : null}
+        <Pressable style={[styles.btn, styles.btnRevisar]} onPress={leerFsi}>
+          <Text style={styles.btnRevisarText}>Volver a revisar</Text>
+        </Pressable>
+
         {Updates.isEnabled ? (
           <>
             <Text style={[styles.seccion, { marginTop: 24 }]}>Actualizaciones</Text>
@@ -203,6 +251,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f5f7' },
   container: { padding: 16 },
   otaMsg: { fontSize: 14, color: '#444', marginBottom: 12 },
+  fsiEstado: { fontSize: 15, fontWeight: '800', marginBottom: 12 },
+  fsiOk: { color: '#1B8B4A' },
+  fsiBad: { color: '#B71C1C' },
+  fsiUnknown: { color: '#888' },
+  btnRevisar: { backgroundColor: '#eeeeee' },
+  btnRevisarText: { color: '#333', fontSize: 15, fontWeight: '700' },
   btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
   btnBuscar: { backgroundColor: '#D4A017' },
   btnInstalar: { backgroundColor: '#22A45A' },
