@@ -8,10 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { PanelScreen } from '../screens/PanelScreen';
 import { PreferencesScreen } from '../screens/PreferencesScreen';
-import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
-import { isOnboardingDone } from '../lib/preferences';
 import { navigationRef } from './navigationRef';
 import { callToRoute, parseCallData } from '../lib/incomingCall';
 import { colors } from '../theme';
@@ -25,21 +23,10 @@ const navTheme = {
   colors: { ...DefaultTheme.colors, background: colors.bg },
 };
 
-function AppStack({
-  onboardingDone,
-  initialCall,
-}: {
-  onboardingDone: boolean;
-  initialCall: CallRoute | null;
-}) {
+function AppStack({ initialCall }: { initialCall: CallRoute | null }) {
   // Si la app se abrió tocando una notificación de llamada/pedido, arrancamos
-  // DIRECTO en IncomingCallScreen (con sus params) en vez de navegar tarde desde
-  // onReady — que se perdía en la carrera con el render de la ruta inicial.
-  const initialRouteName: keyof RootStackParamList = initialCall
-    ? 'IncomingCall'
-    : onboardingDone
-      ? 'Tabs'
-      : 'Onboarding';
+  // DIRECTO en IncomingCallScreen (con sus params); si no, en el panel.
+  const initialRouteName: keyof RootStackParamList = initialCall ? 'IncomingCall' : 'Tabs';
 
   return (
     <Stack.Navigator
@@ -51,7 +38,6 @@ function AppStack({
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Tabs" component={PanelScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Preferences" component={PreferencesScreen} options={{ title: 'Preferencias' }} />
       <Stack.Screen
@@ -66,13 +52,8 @@ function AppStack({
 
 export function RootNavigator() {
   const { session, loading } = useAuth();
-  const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
   // undefined = todavía resolviendo la notificación inicial; null = no hubo.
   const [initialCall, setInitialCall] = useState<CallRoute | null | undefined>(undefined);
-
-  useEffect(() => {
-    isOnboardingDone().then(setOnboardingDone);
-  }, [session?.id]);
 
   // Resolvemos la notificación que abrió la app (app CERRADA/quit) ANTES de
   // renderizar el stack, para poder usarla como ruta inicial. Cubrimos las dos
@@ -102,7 +83,7 @@ export function RootNavigator() {
     };
   }, []);
 
-  if (loading || (session && onboardingDone === null) || initialCall === undefined) {
+  if (loading || initialCall === undefined) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={colors.gold} />
@@ -112,11 +93,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef} theme={navTheme}>
-      {session ? (
-        <AppStack onboardingDone={!!onboardingDone} initialCall={initialCall} />
-      ) : (
-        <LoginScreen />
-      )}
+      {session ? <AppStack initialCall={initialCall} /> : <LoginScreen />}
     </NavigationContainer>
   );
 }

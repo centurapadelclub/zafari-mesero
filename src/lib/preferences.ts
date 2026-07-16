@@ -13,7 +13,6 @@ export type TonePref = 'suave' | 'timbre' | 'alarma';
 
 const KEY_SOUND = 'zafari.pref.sound';
 const KEY_TONE = 'zafari.pref.tone';
-const KEY_ONBOARDING = 'zafari.pref.onboardingDone';
 
 export async function getSoundPref(): Promise<SoundPref> {
   const v = await AsyncStorage.getItem(KEY_SOUND);
@@ -33,21 +32,4 @@ export async function getTonePref(): Promise<TonePref> {
 
 export async function setTonePref(pref: TonePref): Promise<void> {
   await AsyncStorage.setItem(KEY_TONE, pref);
-}
-
-export async function isOnboardingDone(): Promise<boolean> {
-  return (await AsyncStorage.getItem(KEY_ONBOARDING)) === 'true';
-}
-
-export async function setOnboardingDone(): Promise<void> {
-  await AsyncStorage.setItem(KEY_ONBOARDING, 'true');
-}
-
-/**
- * Borra la marca de onboarding. Lo llamamos al cerrar sesión para que el
- * PRÓXIMO login vuelva a pedir el permiso "Mostrar sobre otras apps"
- * (SYSTEM_ALERT_WINDOW) + notificaciones, igual que el primer arranque.
- */
-export async function clearOnboarding(): Promise<void> {
-  await AsyncStorage.removeItem(KEY_ONBOARDING);
 }

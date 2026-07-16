@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import * as Updates from 'expo-updates';
+import notifee, { AuthorizationStatus, AndroidNotificationSetting } from '@notifee/react-native';
 import {
   getSoundPref,
   setSoundPref,
@@ -11,7 +12,63 @@ import {
   setTonePref,
   TonePref,
 } from '../lib/preferences';
-import { canUseFullScreenIntent, openFullScreenIntentSettings } from '../../modules/lock-screen';
+import {
+  requestNotificationPermissions,
+  requestExactAlarmPermission,
+  openPowerManagerSettings,
+} from '../lib/notifications';
+import {
+  canUseFullScreenIntent,
+  openFullScreenIntentSettings,
+  canDrawOverlays,
+  openOverlaySettings,
+  isIgnoringBatteryOptimizations,
+} from '../../modules/lock-screen';
+
+/** Fila de un permiso: título, estado real (si se puede leer) y botón de ajuste. */
+function PermRow({
+  titulo,
+  desc,
+  estado,
+  onAbrir,
+}: {
+  titulo: string;
+  desc?: string;
+  estado: boolean | null;
+  onAbrir: () => void;
+}) {
+  return (
+    <View style={styles.permRow}>
+      <View style={{ flex: 1, paddingRight: 10 }}>
+        <Text style={styles.permTitulo}>{titulo}</Text>
+        {desc ? <Text style={styles.permDesc}>{desc}</Text> : null}
+        <Text
+          style={[
+            styles.permEstado,
+            estado === true ? styles.fsiOk : estado === false ? styles.fsiBad : styles.fsiUnknown,
+          ]}
+        >
+          {estado === true
+            ? 'PERMITIDO ✅'
+            : estado === false
+              ? 'BLOQUEADO ❌'
+              : 'No se puede leer'}
+        </Text>
+      </View>
+      <Pressable style={styles.permBtn} onPress={onAbrir}>
+        <Text style={styles.permBtnText}>Abrir ajuste</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+interface PermsState {
+  notif: boolean | null;
+  alarm: boolean | null;
+  overlay: boolean | null;
+  battery: boolean | null;
+  fsi: boolean | null;
+}
 
 const OPCIONES: { value: SoundPref; titulo: string; desc: string; icon: string }[] = [
   {
@@ -45,21 +102,47 @@ export function PreferencesScreen() {
   const [tono, setTono] = useState<TonePref | null>(null);
   const preview = useAudioPlayer(TONE_SOURCES.timbre);
 
-  // Estado real del permiso de Full Screen Intent (Android 14+). true/false, o
-  // null si no se pudo leer (build sin el módulo nativo). Todo en try-catch.
-  const [fsi, setFsi] = useState<boolean | null>(null);
-  const leerFsi = () => {
+  // Estado real de los permisos (true/false, o null si no se puede leer).
+  const [perms, setPerms] = useState<PermsState>({
+    notif: null,
+    alarm: null,
+    overlay: null,
+    battery: null,
+    fsi: null,
+  });
+
+  const leerPerms = async () => {
+    const next: PermsState = { notif: null, alarm: null, overlay: null, battery: null, fsi: null };
     try {
-      setFsi(canUseFullScreenIntent());
+      const s = await notifee.getNotificationSettings();
+      next.notif = s.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
+      // alarm: ENABLED/NOT_SUPPORTED => concedido; DISABLED => bloqueado.
+      next.alarm = s.android?.alarm !== AndroidNotificationSetting.DISABLED;
     } catch {
-      setFsi(null);
+      // deja notif/alarm en null
     }
+    try {
+      next.overlay = canDrawOverlays();
+    } catch {
+      /* null */
+    }
+    try {
+      next.battery = isIgnoringBatteryOptimizations();
+    } catch {
+      /* null */
+    }
+    try {
+      next.fsi = canUseFullScreenIntent();
+    } catch {
+      /* null */
+    }
+    setPerms(next);
   };
 
   useEffect(() => {
     getSoundPref().then(setPref);
     getTonePref().then(setTono);
-    leerFsi();
+    leerPerms();
   }, []);
 
   const elegir = async (value: SoundPref) => {
@@ -171,38 +254,62 @@ export function PreferencesScreen() {
           );
         })}
 
-        <Text style={[styles.seccion, { marginTop: 24 }]}>Pantalla completa (llamadas)</Text>
+        <Text style={[styles.seccion, { marginTop: 24 }]}>Permisos</Text>
         <Text style={styles.nota}>
-          En Android 14+ este permiso hace falta para que el llamado abra la pantalla completa
-          automáticamente (aunque el celular esté bloqueado).
+          Configuración inicial del dispositivo (una sola vez). Tocá "Abrir ajuste" en cada uno y
+          activalo; después volvé y tocá "Volver a revisar".
         </Text>
-        <Text
-          style={[
-            styles.fsiEstado,
-            fsi === true ? styles.fsiOk : fsi === false ? styles.fsiBad : styles.fsiUnknown,
-          ]}
-        >
-          {fsi === true
-            ? 'Estado: PERMITIDO ✅'
-            : fsi === false
-              ? 'Estado: BLOQUEADO ❌'
-              : 'Estado: no disponible en este build'}
-        </Text>
-        {fsi === false ? (
-          <Pressable
-            style={[styles.btn, styles.btnBuscar]}
-            onPress={() => {
-              try {
-                openFullScreenIntentSettings();
-              } catch {
-                // no-op
-              }
-            }}
-          >
-            <Text style={styles.btnText}>Permitir pantalla completa</Text>
-          </Pressable>
-        ) : null}
-        <Pressable style={[styles.btn, styles.btnRevisar]} onPress={leerFsi}>
+
+        <PermRow
+          titulo="Notificaciones"
+          desc="Necesario para recibir cualquier aviso."
+          estado={perms.notif}
+          onAbrir={() => {
+            requestNotificationPermissions().catch(() => {});
+          }}
+        />
+        <PermRow
+          titulo="Pantalla completa (llamadas)"
+          desc="Android 14+: abre la llamada a pantalla completa aunque esté bloqueado."
+          estado={perms.fsi}
+          onAbrir={() => {
+            try {
+              openFullScreenIntentSettings();
+            } catch {
+              /* no-op */
+            }
+          }}
+        />
+        <PermRow
+          titulo="Mostrar sobre otras apps"
+          desc="Permite superponer la pantalla de llamada."
+          estado={perms.overlay}
+          onAbrir={() => {
+            try {
+              openOverlaySettings();
+            } catch {
+              /* no-op */
+            }
+          }}
+        />
+        <PermRow
+          titulo="Alarmas exactas"
+          desc="Para que el Snooze reprograme la llamada a los 30 s exactos."
+          estado={perms.alarm}
+          onAbrir={() => {
+            requestExactAlarmPermission().catch(() => {});
+          }}
+        />
+        <PermRow
+          titulo="Optimización de batería"
+          desc="Excluí la app para que el sistema no la cierre en segundo plano."
+          estado={perms.battery}
+          onAbrir={() => {
+            openPowerManagerSettings().catch(() => {});
+          }}
+        />
+
+        <Pressable style={[styles.btn, styles.btnRevisar]} onPress={leerPerms}>
           <Text style={styles.btnRevisarText}>Volver a revisar</Text>
         </Pressable>
 
@@ -251,12 +358,29 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f5f7' },
   container: { padding: 16 },
   otaMsg: { fontSize: 14, color: '#444', marginBottom: 12 },
-  fsiEstado: { fontSize: 15, fontWeight: '800', marginBottom: 12 },
   fsiOk: { color: '#1B8B4A' },
   fsiBad: { color: '#B71C1C' },
   fsiUnknown: { color: '#888' },
   btnRevisar: { backgroundColor: '#eeeeee' },
   btnRevisarText: { color: '#333', fontSize: 15, fontWeight: '700' },
+  permRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  permTitulo: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  permDesc: { fontSize: 12, color: '#777', marginTop: 2 },
+  permEstado: { fontSize: 13, fontWeight: '800', marginTop: 6 },
+  permBtn: {
+    backgroundColor: '#D4A017',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  permBtnText: { color: '#000', fontSize: 13, fontWeight: '800' },
   btn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginBottom: 12 },
   btnBuscar: { backgroundColor: '#D4A017' },
   btnInstalar: { backgroundColor: '#22A45A' },

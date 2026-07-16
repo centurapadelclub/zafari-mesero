@@ -9,6 +9,9 @@ interface LockScreenNative {
   setShowWhenLocked(enabled: boolean): void;
   canUseFullScreenIntent(): boolean;
   openFullScreenIntentSettings(): void;
+  canDrawOverlays(): boolean;
+  openOverlaySettings(): void;
+  isIgnoringBatteryOptimizations(): boolean;
 }
 
 const LockScreen = requireOptionalNativeModule<LockScreenNative>('LockScreen');
@@ -40,5 +43,31 @@ export function openFullScreenIntentSettings(): void {
     LockScreen?.openFullScreenIntentSettings();
   } catch {
     // no-op si el módulo no está disponible
+  }
+}
+
+/** "Mostrar sobre otras apps" (SYSTEM_ALERT_WINDOW). null si no se pudo leer. */
+export function canDrawOverlays(): boolean | null {
+  try {
+    return LockScreen ? LockScreen.canDrawOverlays() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function openOverlaySettings(): void {
+  try {
+    LockScreen?.openOverlaySettings();
+  } catch {
+    // no-op
+  }
+}
+
+/** true = la app está exenta de optimización de batería. null si no se pudo leer. */
+export function isIgnoringBatteryOptimizations(): boolean | null {
+  try {
+    return LockScreen ? LockScreen.isIgnoringBatteryOptimizations() : null;
+  } catch {
+    return null;
   }
 }

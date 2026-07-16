@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.WindowManager
 import expo.modules.kotlin.modules.Module
@@ -67,6 +68,28 @@ class LockScreenModule : Module() {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(intent)
       }
+    }
+
+    // "Mostrar sobre otras apps" (SYSTEM_ALERT_WINDOW).
+    Function("canDrawOverlays") {
+      val ctx = appContext.reactContext ?: return@Function false
+      return@Function Settings.canDrawOverlays(ctx)
+    }
+    Function("openOverlaySettings") {
+      val activity = appContext.currentActivity ?: return@Function
+      val intent = Intent(
+        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+        Uri.parse("package:" + activity.packageName),
+      )
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      activity.startActivity(intent)
+    }
+
+    // Optimización de batería: true = la app está exenta (no la matan).
+    Function("isIgnoringBatteryOptimizations") {
+      val ctx = appContext.reactContext ?: return@Function false
+      val pm = ctx.getSystemService(Context.POWER_SERVICE) as? PowerManager
+      return@Function pm?.isIgnoringBatteryOptimizations(ctx.packageName) ?: false
     }
   }
 }
