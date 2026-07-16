@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Updates from 'expo-updates';
+import { useUpdates } from 'expo-updates';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
@@ -39,6 +40,34 @@ export function LoginScreen() {
   const [loadingMeseros, setLoadingMeseros] = useState(true);
   const [meserosError, setMeserosError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Diagnóstico de OTA: si el bundle anterior crasheó al inicializar, el motivo
+  // aparece en initializationError. TODO envuelto en try-catch para que este
+  // diagnóstico jamás pueda crashear. (Va en el build embebido, no en un OTA.)
+  const updatesState = useUpdates();
+  let otaErrDiag: string;
+  try {
+    // initializationError no está tipado en useUpdates de esta versión, pero
+    // puede existir en runtime: lo leemos con cast seguro. checkError/downloadError
+    // sí existen y capturan errores de arranque/descarga del update.
+    const u = updatesState as unknown as {
+      initializationError?: { message?: string };
+      checkError?: { message?: string };
+      downloadError?: { message?: string };
+    };
+    const initErr = u?.initializationError?.message ?? '—';
+    const checkErr = u?.checkError?.message ?? '—';
+    const dlErr = u?.downloadError?.message ?? '—';
+    let embedded = '?';
+    try {
+      embedded = String(Updates.isEmbeddedLaunch);
+    } catch {
+      embedded = 'err';
+    }
+    otaErrDiag = `emb:${embedded}\ninit: ${initErr}\ncheck: ${checkErr}\ndl: ${dlErr}`;
+  } catch (e) {
+    otaErrDiag = `diag OTA err: ${String(e)}`;
+  }
 
   const cargarMeseros = async () => {
     setLoadingMeseros(true);
@@ -154,7 +183,8 @@ export function LoginScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Versión de la app, discreta al fondo. */}
+      {/* Diagnóstico de errores de OTA (temporal) + versión de la app. */}
+      <Text style={styles.otaErr}>{otaErrDiag}</Text>
       <Text style={styles.version}>{VERSION_TEXT}</Text>
 
       {/* Modal selector de nombre */}
@@ -241,6 +271,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     fontSize: 11,
     color: '#333333',
+  },
+  otaErr: {
+    position: 'absolute',
+    bottom: 54,
+    alignSelf: 'center',
+    textAlign: 'center',
+    fontSize: 10,
+    color: '#B71C1C',
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
