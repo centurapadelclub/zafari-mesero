@@ -26,20 +26,14 @@ import App from './App';
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   try {
     const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-    // eslint-disable-next-line no-console
-    console.log('[TRACE] bg handler recibió push, call=' + JSON.stringify(call));
     if (call) {
       // Persistir ANTES de mostrar: el push REVIVE la app sin tap, así que
       // getInitialNotification devolverá null; esta es la única fuente segura
       // del call para arrancar en IncomingCall al montar (ver RootNavigator).
       await savePendingIncomingCall(call);
-      // eslint-disable-next-line no-console
-      console.log('[TRACE] persistió call en storage');
       // displayIncomingCall arma el Full Screen Intent: ESE es el mecanismo que
       // trae la ventana al frente sobre el bloqueo (tanto cold como warm start).
       await displayIncomingCall(call);
-      // eslint-disable-next-line no-console
-      console.log('[TRACE] bg handler llamó displayIncomingCall');
       // WARM START (app VIVA en background): el push data-only entra por este
       // handler pero RootNavigator NO se re-monta ni onCreate corre. Diferenciamos
       // según el estado del keyguard (comportamiento tipo WhatsApp):
@@ -55,17 +49,12 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
       //    bloqueado (no arriesgar perder el caso crítico sobre el lock).
       try {
         const locked = isKeyguardLocked();
-        // eslint-disable-next-line no-console
-        console.log('[TRACE] warm start keyguard locked=' + locked);
-        if (locked === false) {
-          // eslint-disable-next-line no-console
-          console.log('[TRACE] warm start: desbloqueado, solo heads-up (esperar tap)');
-        } else {
+        if (locked !== false) {
+          // BLOQUEADO (o null = default seguro): forzar la pantalla sobre el lock.
           setShowWhenLocked(true);
           navigateToIncomingCall(callToRoute(call));
-          // eslint-disable-next-line no-console
-          console.log('[TRACE] warm start: bloqueado, setShowWhenLocked + navigate');
         }
+        // DESBLOQUEADO: no forzar; solo el heads-up y esperar el tap del banner.
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[index] warm start keyguard/navigate falló:', e);
@@ -105,12 +94,8 @@ installGlobalErrorHandler();
 try {
   notifee.onBackgroundEvent(async ({ type, detail }) => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[TRACE] onBackgroundEvent type=' + type);
       if (type === EventType.PRESS) {
         const call = parseCallData(detail.notification?.data as Record<string, unknown> | undefined);
-        // eslint-disable-next-line no-console
-        console.log('[TRACE] onBackgroundEvent PRESS call=' + JSON.stringify(call));
         if (call) navigateToIncomingCall(callToRoute(call));
       }
     } catch (err) {

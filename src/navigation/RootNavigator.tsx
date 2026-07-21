@@ -65,8 +65,6 @@ export function RootNavigator() {
       try {
         const n = await notifee.getInitialNotification();
         call = parseCallData(n?.notification?.data as Record<string, unknown> | undefined);
-        // eslint-disable-next-line no-console
-        console.log('[TRACE] getInitialNotification notifee=' + JSON.stringify(call));
       } catch {
         // ignorar
       }
@@ -74,8 +72,6 @@ export function RootNavigator() {
         try {
           const f = await messaging().getInitialNotification();
           call = parseCallData(f?.data as Record<string, unknown> | undefined);
-          // eslint-disable-next-line no-console
-          console.log('[TRACE] getInitialNotification notifee=' + JSON.stringify(call));
         } catch {
           // ignorar
         }
@@ -85,10 +81,7 @@ export function RootNavigator() {
       // por el background handler; lo leemos (y borramos) si es reciente (< 30 s).
       // Prioridad: tap real (getInitialNotification) primero; si no hubo, storage.
       if (!call) {
-        const stored = await takePendingIncomingCall();
-        // eslint-disable-next-line no-console
-        console.log('[TRACE] initialCall desde storage=' + JSON.stringify(stored));
-        call = stored;
+        call = await takePendingIncomingCall();
       }
       if (!cancelled) setInitialCall(call ? callToRoute(call) : null);
     })();
