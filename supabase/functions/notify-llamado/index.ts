@@ -147,10 +147,7 @@ async function sendFcm(
       token,
       data,
       android: {
-        priority: 'high', // despierta el dispositivo para procesar el push
-        notification: {
-          channel_id: 'llamados-v3', // canal HIGH creado por la app (heads-up)
-        },
+        priority: 'high', // despierta el dispositivo para procesar el push (data-only)
       },
     },
   };
