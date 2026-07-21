@@ -7,6 +7,7 @@ import notifee, {
   TriggerType,
   TimestampTrigger,
 } from '@notifee/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RootStackParamList } from '../types/db';
 import { CHANNEL_HEADSUP, callChannelForPref, ensureChannels } from './notifications';
 
@@ -106,6 +107,58 @@ export async function displayHeadsUp(call: CallData): Promise<void> {
       autoCancel: true,
     },
   });
+}
+
+/**
+ * Persistencia de la "llamada pendiente" del cold start.
+ *
+ * En arranque en frío, el push data-only REVIVE la app vía
+ * setBackgroundMessageHandler SIN que el usuario toque nada. Por eso
+ * notifee.getInitialNotification() devuelve null (solo trae la notif con TAP) y
+ * onBackgroundEvent llega como DELIVERED, no PRESS → no hay forma de saber a qué
+ * llamada arrancar. El ÚNICO punto donde el call existe con certeza es el
+ * background handler cuando llega el push: ahí lo guardamos y al montar lo leemos.
+ */
+const PENDING_CALL_KEY = 'pending_incoming_call';
+const PENDING_CALL_MAX_AGE_MS = 30000;
+
+/** Guarda el call que llegó por push (con timestamp) para leerlo al montar. */
+export async function savePendingIncomingCall(call: CallData): Promise<void> {
+  await AsyncStorage.setItem(
+    PENDING_CALL_KEY,
+    JSON.stringify({ ...call, ts: Date.now() }),
+  );
+}
+
+/** Lee y BORRA la llamada pendiente. Devuelve la CallData solo si es reciente
+ *  (< 30 s); si es vieja o no hay, devuelve null. Borra siempre tras leer para
+ *  no reabrir en el siguiente arranque normal. */
+export async function takePendingIncomingCall(): Promise<CallData | null> {
+  let raw: string | null = null;
+  try {
+    raw = await AsyncStorage.getItem(PENDING_CALL_KEY);
+    await AsyncStorage.removeItem(PENDING_CALL_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const ts = typeof obj.ts === 'number' ? obj.ts : 0;
+    if (Date.now() - ts > PENDING_CALL_MAX_AGE_MS) return null; // rancio
+    return parseCallData(obj);
+  } catch {
+    return null;
+  }
+}
+
+/** Borra la llamada pendiente (por si acaso, al cerrar la pantalla). */
+export async function clearPendingIncomingCall(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(PENDING_CALL_KEY);
+  } catch {
+    // ignorar
+  }
 }
 
 /** Params de navegación a IncomingCall a partir de una CallData. */

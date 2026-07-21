@@ -11,7 +11,7 @@ import { PreferencesScreen } from '../screens/PreferencesScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
 import { navigationRef, flushPendingCall, clearPendingCall } from './navigationRef';
-import { callToRoute, parseCallData } from '../lib/incomingCall';
+import { callToRoute, parseCallData, takePendingIncomingCall } from '../lib/incomingCall';
 import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -79,6 +79,16 @@ export function RootNavigator() {
         } catch {
           // ignorar
         }
+      }
+      // Fallback COLD START: el push data-only revive la app sin tap, así que
+      // getInitialNotification viene null. El call quedó persistido en storage
+      // por el background handler; lo leemos (y borramos) si es reciente (< 30 s).
+      // Prioridad: tap real (getInitialNotification) primero; si no hubo, storage.
+      if (!call) {
+        const stored = await takePendingIncomingCall();
+        // eslint-disable-next-line no-console
+        console.log('[TRACE] initialCall desde storage=' + JSON.stringify(stored));
+        call = stored;
       }
       if (!cancelled) setInitialCall(call ? callToRoute(call) : null);
     })();

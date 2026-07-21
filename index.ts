@@ -2,7 +2,12 @@ import { registerRootComponent } from 'expo';
 import messaging from '@react-native-firebase/messaging';
 import notifee, { EventType } from '@notifee/react-native';
 
-import { parseCallData, displayIncomingCall, callToRoute } from './src/lib/incomingCall';
+import {
+  parseCallData,
+  displayIncomingCall,
+  callToRoute,
+  savePendingIncomingCall,
+} from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
@@ -23,6 +28,12 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
     // eslint-disable-next-line no-console
     console.log('[TRACE] bg handler recibió push, call=' + JSON.stringify(call));
     if (call) {
+      // Persistir ANTES de mostrar: el push REVIVE la app sin tap, así que
+      // getInitialNotification devolverá null; esta es la única fuente segura
+      // del call para arrancar en IncomingCall al montar (ver RootNavigator).
+      await savePendingIncomingCall(call);
+      // eslint-disable-next-line no-console
+      console.log('[TRACE] persistió call en storage');
       await displayIncomingCall(call);
       // eslint-disable-next-line no-console
       console.log('[TRACE] bg handler llamó displayIncomingCall');

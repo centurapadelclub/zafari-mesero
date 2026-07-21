@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SlideToAct } from '../components/SlideToAct';
 import { startCallVibration, stopCallVibration } from '../lib/notifications';
-import { scheduleSnooze } from '../lib/incomingCall';
+import { scheduleSnooze, clearPendingIncomingCall } from '../lib/incomingCall';
 import { setShowWhenLocked } from '../../modules/lock-screen';
 import { getSoundPref, getTonePref, TonePref } from '../lib/preferences';
 import { money } from '../lib/money';
@@ -142,6 +142,9 @@ export function IncomingCallScreen() {
 
   const cerrar = () => {
     releaseLockScreen();
+    // Borrar la llamada pendiente del storage para no reabrirla en el próximo
+    // arranque (ya la atendimos/ignoramos).
+    clearPendingIncomingCall();
     stopCallVibration();
     stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});
@@ -162,6 +165,7 @@ export function IncomingCallScreen() {
   /** "Ver pedido": cierra y abre el detalle de ese pedido en la pestaña Pedidos. */
   const verPedido = () => {
     releaseLockScreen();
+    clearPendingIncomingCall();
     stopCallVibration();
     stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});
