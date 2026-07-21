@@ -10,7 +10,7 @@ import { PanelScreen } from '../screens/PanelScreen';
 import { PreferencesScreen } from '../screens/PreferencesScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
-import { navigationRef, flushPendingCall } from './navigationRef';
+import { navigationRef, flushPendingCall, clearPendingCall } from './navigationRef';
 import { callToRoute, parseCallData } from '../lib/incomingCall';
 import { colors } from '../theme';
 
@@ -93,6 +93,14 @@ export function RootNavigator() {
         <ActivityIndicator size="large" color={colors.gold} />
       </View>
     );
+  }
+
+  // getInitialNotification trae el llamado CORRECTO que abrió la app y ya lo
+  // usamos como ruta inicial (initialRouteName). Tiene prioridad sobre pendingCall:
+  // limpiamos cualquier llamado viejo encolado durante el cold start para que
+  // flushPendingCall (onReady) no pise la ruta inicial con uno rancio.
+  if (initialCall !== null) {
+    clearPendingCall();
   }
 
   return (
