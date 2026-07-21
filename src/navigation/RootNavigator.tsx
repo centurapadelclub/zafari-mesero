@@ -65,6 +65,8 @@ export function RootNavigator() {
       try {
         const n = await notifee.getInitialNotification();
         call = parseCallData(n?.notification?.data as Record<string, unknown> | undefined);
+        // eslint-disable-next-line no-console
+        console.log('[TRACE] getInitialNotification notifee=' + JSON.stringify(call));
       } catch {
         // ignorar
       }
@@ -72,6 +74,8 @@ export function RootNavigator() {
         try {
           const f = await messaging().getInitialNotification();
           call = parseCallData(f?.data as Record<string, unknown> | undefined);
+          // eslint-disable-next-line no-console
+          console.log('[TRACE] getInitialNotification notifee=' + JSON.stringify(call));
         } catch {
           // ignorar
         }

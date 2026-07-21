@@ -20,7 +20,13 @@ import App from './App';
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   try {
     const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-    if (call) await displayIncomingCall(call);
+    // eslint-disable-next-line no-console
+    console.log('[TRACE] bg handler recibió push, call=' + JSON.stringify(call));
+    if (call) {
+      await displayIncomingCall(call);
+      // eslint-disable-next-line no-console
+      console.log('[TRACE] bg handler llamó displayIncomingCall');
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[index] error en background message handler:', err);
@@ -55,8 +61,12 @@ installGlobalErrorHandler();
 try {
   notifee.onBackgroundEvent(async ({ type, detail }) => {
     try {
+      // eslint-disable-next-line no-console
+      console.log('[TRACE] onBackgroundEvent type=' + type);
       if (type === EventType.PRESS) {
         const call = parseCallData(detail.notification?.data as Record<string, unknown> | undefined);
+        // eslint-disable-next-line no-console
+        console.log('[TRACE] onBackgroundEvent PRESS call=' + JSON.stringify(call));
         if (call) navigateToIncomingCall(callToRoute(call));
       }
     } catch (err) {
