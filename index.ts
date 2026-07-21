@@ -9,6 +9,7 @@ import {
   savePendingIncomingCall,
 } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
+import { setShowWhenLocked } from './modules/lock-screen';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
@@ -34,9 +35,28 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
       await savePendingIncomingCall(call);
       // eslint-disable-next-line no-console
       console.log('[TRACE] persistió call en storage');
+      // displayIncomingCall arma el Full Screen Intent: ESE es el mecanismo que
+      // trae la ventana al frente sobre el bloqueo (tanto cold como warm start).
       await displayIncomingCall(call);
       // eslint-disable-next-line no-console
       console.log('[TRACE] bg handler llamó displayIncomingCall');
+      // WARM START (app VIVA en background + cel bloqueado): el push data-only
+      // entra por este handler pero RootNavigator NO se re-monta ni onCreate
+      // corre, así que nada activa showWhenLocked ni navega. Lo hacemos acá:
+      //  - setShowWhenLocked(true): como onCreate no corre, marca la Activity
+      //    existente para que, cuando el FSI la traiga al frente, se muestre
+      //    SOBRE el bloqueo (por sí solo no la trae al frente; eso lo hace el FSI).
+      //  - navigateToIncomingCall: si el navigator está listo (app viva) navega
+      //    ya; si no (cold start), cae en pendingCall como red de seguridad.
+      try {
+        setShowWhenLocked(true);
+        navigateToIncomingCall(callToRoute(call));
+        // eslint-disable-next-line no-console
+        console.log('[TRACE] warm start: setShowWhenLocked + navigate');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[index] warm start setShowWhenLocked/navigate falló:', e);
+      }
     }
   } catch (err) {
     // eslint-disable-next-line no-console
