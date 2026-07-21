@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import * as Updates from 'expo-updates';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { usePedidos } from '../hooks/usePedidos';
@@ -24,6 +25,18 @@ import { requestNotificationPermissions } from '../lib/notifications';
 import { Id, Pedido, PedidoItem, RootStackParamList } from '../types/db';
 
 type Tab = 'llamados' | 'pedidos';
+
+// Solo lectura: qué OTA update está corriendo (o "embedded" si es el bundle del
+// build). Sirve para confirmar en el teléfono cuándo aplicó el último eas update.
+const OTA_INFO = (() => {
+  try {
+    const id = Updates.updateId ? Updates.updateId.slice(0, 8) : 'embedded';
+    const created = Updates.createdAt ? Updates.createdAt.toISOString() : '—';
+    return `OTA ${id} · ${created}`;
+  } catch {
+    return 'OTA —';
+  }
+})();
 
 function Badge({ n }: { n: number }) {
   if (!n) return null;
@@ -218,6 +231,7 @@ export function PanelScreen() {
           />
         )}
 
+        <Text style={styles.otaInfo}>{OTA_INFO}</Text>
         <PulsoFooter />
       </ScrollView>
 
@@ -431,4 +445,11 @@ const styles = StyleSheet.create({
   histPillText: { color: colors.textDim, fontSize: 12, fontWeight: '700' },
   empty: { color: colors.textMuted, textAlign: 'center', marginVertical: 24, fontSize: 15 },
   emptySmall: { color: colors.textMuted, textAlign: 'center', marginVertical: 12, fontSize: 14 },
+  otaInfo: {
+    color: colors.textMuted,
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 14,
+    fontVariant: ['tabular-nums'],
+  },
 });
