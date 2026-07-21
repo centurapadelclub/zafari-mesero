@@ -7,6 +7,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
  */
 interface LockScreenNative {
   setShowWhenLocked(enabled: boolean): void;
+  isKeyguardLocked(): boolean;
   canUseFullScreenIntent(): boolean;
   openFullScreenIntentSettings(): void;
   canDrawOverlays(): boolean;
@@ -21,6 +22,23 @@ export function setShowWhenLocked(enabled: boolean): void {
     LockScreen?.setShowWhenLocked(enabled);
   } catch {
     // el módulo puede no estar disponible en este build: no pasa nada
+  }
+}
+
+/**
+ * Estado del keyguard: true = pantalla bloqueada, false = desbloqueada.
+ * Devuelve null si el método nativo no está presente en este build (requiere el
+ * build que agrega isKeyguardLocked). Se chequea con typeof porque un build
+ * viejo tiene el módulo pero SIN esta función.
+ */
+export function isKeyguardLocked(): boolean | null {
+  try {
+    if (LockScreen && typeof LockScreen.isKeyguardLocked === 'function') {
+      return LockScreen.isKeyguardLocked();
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 

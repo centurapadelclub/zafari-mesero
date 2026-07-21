@@ -55,8 +55,12 @@ async function buildIncomingCallNotification(call: CallData) {
       importance: AndroidImportance.HIGH,
       category: AndroidCategory.CALL,
       // Lanza la app a pantalla completa sobre el bloqueo:
-      fullScreenAction: { id: 'incoming-call' },
-      pressAction: { id: 'incoming-call' },
+      fullScreenAction: { id: 'incoming-call', launchActivity: 'default' },
+      // launchActivity 'default' es CLAVE: sin él, tocar el banner entrega el
+      // evento PRESS pero NO trae la app al frente (bug del warm start
+      // desbloqueado). Con 'default', Android relanza la MainActivity (trae la
+      // task al frente) al tocar, además de entregar el PRESS que navega.
+      pressAction: { id: 'incoming-call', launchActivity: 'default' },
       ongoing: true,
       autoCancel: false,
       timeoutAfter: 30000, // se descarta sola a los 30 s si nadie atiende

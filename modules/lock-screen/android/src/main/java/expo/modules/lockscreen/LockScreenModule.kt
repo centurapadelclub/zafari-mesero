@@ -48,6 +48,15 @@ class LockScreenModule : Module() {
       null
     }
 
+    // Estado del keyguard: true = la pantalla está bloqueada (segura o no). Se usa
+    // en el warm start para decidir si forzar la pantalla sobre el bloqueo
+    // (bloqueado) o solo mostrar heads-up y esperar el tap (desbloqueado).
+    Function("isKeyguardLocked") {
+      val ctx = appContext.reactContext
+      val km = ctx?.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+      if (ctx != null && km != null) km.isKeyguardLocked else false
+    }
+
     // Estado real del permiso de Full Screen Intent. En Android 14 (API 34+) ya
     // NO se concede automáticamente. En < 34 siempre está concedido.
     Function("canUseFullScreenIntent") {

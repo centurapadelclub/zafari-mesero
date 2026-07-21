@@ -9,7 +9,7 @@ import {
   savePendingIncomingCall,
 } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
-import { setShowWhenLocked } from './modules/lock-screen';
+import { setShowWhenLocked, isKeyguardLocked } from './modules/lock-screen';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
@@ -40,22 +40,35 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
       await displayIncomingCall(call);
       // eslint-disable-next-line no-console
       console.log('[TRACE] bg handler llamó displayIncomingCall');
-      // WARM START (app VIVA en background + cel bloqueado): el push data-only
-      // entra por este handler pero RootNavigator NO se re-monta ni onCreate
-      // corre, así que nada activa showWhenLocked ni navega. Lo hacemos acá:
-      //  - setShowWhenLocked(true): como onCreate no corre, marca la Activity
-      //    existente para que, cuando el FSI la traiga al frente, se muestre
-      //    SOBRE el bloqueo (por sí solo no la trae al frente; eso lo hace el FSI).
-      //  - navigateToIncomingCall: si el navigator está listo (app viva) navega
-      //    ya; si no (cold start), cae en pendingCall como red de seguridad.
+      // WARM START (app VIVA en background): el push data-only entra por este
+      // handler pero RootNavigator NO se re-monta ni onCreate corre. Diferenciamos
+      // según el estado del keyguard (comportamiento tipo WhatsApp):
+      //  - BLOQUEADO: forzar la pantalla sobre el lock. setShowWhenLocked(true)
+      //    marca la Activity existente para mostrarse sobre el bloqueo cuando el
+      //    FSI la traiga al frente (onCreate no corre en warm); navigate deja el
+      //    JS en la pantalla correcta.
+      //  - DESBLOQUEADO: NO forzar (Android 14 no lo permite sin consentimiento y
+      //    el usuario está usando el cel). Solo el heads-up que Android degrada
+      //    del FSI; el mesero toca el banner (launchActivity 'default' foregroundea
+      //    + onBackgroundEvent PRESS navega).
+      //  - null (build sin isKeyguardLocked todavía): default SEGURO = tratar como
+      //    bloqueado (no arriesgar perder el caso crítico sobre el lock).
       try {
-        setShowWhenLocked(true);
-        navigateToIncomingCall(callToRoute(call));
+        const locked = isKeyguardLocked();
         // eslint-disable-next-line no-console
-        console.log('[TRACE] warm start: setShowWhenLocked + navigate');
+        console.log('[TRACE] warm start keyguard locked=' + locked);
+        if (locked === false) {
+          // eslint-disable-next-line no-console
+          console.log('[TRACE] warm start: desbloqueado, solo heads-up (esperar tap)');
+        } else {
+          setShowWhenLocked(true);
+          navigateToIncomingCall(callToRoute(call));
+          // eslint-disable-next-line no-console
+          console.log('[TRACE] warm start: bloqueado, setShowWhenLocked + navigate');
+        }
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.error('[index] warm start setShowWhenLocked/navigate falló:', e);
+        console.error('[index] warm start keyguard/navigate falló:', e);
       }
     }
   } catch (err) {
