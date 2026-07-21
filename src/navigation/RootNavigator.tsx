@@ -10,7 +10,7 @@ import { PanelScreen } from '../screens/PanelScreen';
 import { PreferencesScreen } from '../screens/PreferencesScreen';
 import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
-import { navigationRef } from './navigationRef';
+import { navigationRef, flushPendingCall } from './navigationRef';
 import { callToRoute, parseCallData } from '../lib/incomingCall';
 import { colors } from '../theme';
 
@@ -92,7 +92,7 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={flushPendingCall}>
       {session ? <AppStack initialCall={initialCall} /> : <LoginScreen />}
     </NavigationContainer>
   );
