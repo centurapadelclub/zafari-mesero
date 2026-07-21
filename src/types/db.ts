@@ -74,6 +74,7 @@ export interface Pedido {
   nombre_cliente?: string | null;
   telefono_cliente?: string | null;
   total?: number | null;
+  notas?: string | null; // nota general del pedido
   created_at: string;
   atendido_at?: string | null;
   mesero_id?: Id | null;
@@ -81,7 +82,7 @@ export interface Pedido {
 
 /**
  * Detalle de un pedido (esquema real):
- *   pedido_items: id, pedido_id, nombre_producto, cantidad, precio_unitario, subtotal
+ *   pedido_items: id, pedido_id, nombre_producto, cantidad, precio_unitario, subtotal, notas
  *   pedido_item_modificadores: pedido_item_id, nombre_modificador, nombre_opcion, precio_extra
  */
 export const PEDIDO_ITEMS_TABLE = 'pedido_items';
@@ -100,6 +101,7 @@ export interface PedidoItem {
   cantidad: number;
   precioUnitario?: number | null; // precio_unitario
   subtotal?: number | null;
+  notas?: string | null; // nota del artículo (pedido_items.notas)
   modificadores: PedidoItemModificador[];
 }
 

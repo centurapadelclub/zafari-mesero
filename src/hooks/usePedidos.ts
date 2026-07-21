@@ -28,6 +28,7 @@ function itemBaseFromRow(r: Record<string, unknown>): PedidoItem {
     cantidad: asNum(r.cantidad) ?? 1,
     precioUnitario: asNum(r.precio_unitario),
     subtotal: asNum(r.subtotal),
+    notas: r.notas != null ? String(r.notas) : null,
     modificadores: [],
   };
 }

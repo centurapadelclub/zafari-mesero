@@ -52,6 +52,13 @@ export function PedidoDetalleModal({ pedido, items, loading, onClose }: Props) {
                   : ''}
               </Text>
 
+              {pedido.notas ? (
+                <View style={styles.notaPedido}>
+                  <Text style={styles.notaPedidoLabel}>📝 NOTA DEL PEDIDO</Text>
+                  <Text style={styles.notaPedidoText}>{pedido.notas}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.divider} />
 
               <ScrollView style={styles.itemsScroll}>
@@ -75,6 +82,7 @@ export function PedidoDetalleModal({ pedido, items, loading, onClose }: Props) {
                           {m.precio_extra ? ` (${money(m.precio_extra)})` : ''}
                         </Text>
                       ))}
+                      {it.notas ? <Text style={styles.itemNota}>📝 {it.notas}</Text> : null}
                     </View>
                   ))
                 ) : (
@@ -124,7 +132,19 @@ const styles = StyleSheet.create({
   itemName: { color: colors.text, fontSize: 15, flex: 1 },
   itemQty: { color: colors.gold, fontWeight: '900' },
   itemMod: { color: colors.textMuted, fontSize: 13, marginTop: 1, marginLeft: 2 },
+  itemNota: { color: colors.gold, fontSize: 13, fontStyle: 'italic', marginTop: 2, marginLeft: 2 },
   itemPrecio: { color: colors.gold, fontSize: 15, fontWeight: '700' },
+  notaPedido: {
+    marginTop: 12,
+    backgroundColor: colors.bg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.gold,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  notaPedidoLabel: { color: colors.gold, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  notaPedidoText: { color: colors.text, fontSize: 15, marginTop: 3 },
   dim: { color: colors.textMuted, fontSize: 14, paddingVertical: 16, textAlign: 'center' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalLabel: { color: colors.gold, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
