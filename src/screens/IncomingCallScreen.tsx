@@ -127,7 +127,21 @@ export function IncomingCallScreen() {
     }
   };
 
+  /** Restaura el comportamiento normal ante el bloqueo. Se llama EXPLÍCITAMENTE en
+   *  cada camino de salida porque cuando IncomingCall es la ruta inicial (cold
+   *  start), navegar a 'Tabs' la deja MONTADA debajo → el cleanup del useEffect
+   *  NO corre. Sin esto, con showWhenLocked activado siempre en onCreate, la app
+   *  quedaría visible sobre el bloqueo permanentemente. */
+  const releaseLockScreen = () => {
+    try {
+      setShowWhenLocked(false);
+    } catch {
+      // el módulo nativo puede no estar disponible
+    }
+  };
+
   const cerrar = () => {
+    releaseLockScreen();
     stopCallVibration();
     stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});
@@ -147,6 +161,7 @@ export function IncomingCallScreen() {
 
   /** "Ver pedido": cierra y abre el detalle de ese pedido en la pestaña Pedidos. */
   const verPedido = () => {
+    releaseLockScreen();
     stopCallVibration();
     stopRingtone();
     notifee.cancelAllNotifications().catch(() => {});

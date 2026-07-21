@@ -6,32 +6,35 @@ const { withMainActivity } = require('@expo/config-plugins');
  * Cuando un Full Screen Intent de llamada abre la app estando bloqueada, la
  * MainActivity.onCreate corre ANTES que el JS, así que el módulo dinámico
  * (LockScreen) todavía no aplicó showWhenLocked. Este plugin inyecta, en
- * onCreate, la activación de showWhenLocked/turnScreenOn PERO solo si el
- * keyguard está bloqueado en ese momento.
+ * onCreate, la activación INCONDICIONAL de showWhenLocked/turnScreenOn.
  *
- * ¿Por qué es seguro (no reintroduce el bug de "siempre sobre el bloqueo")?
- * Un arranque en frío con el keyguard bloqueado solo ocurre por el FSI de la
- * llamada (un launch normal desde el launcher pasa DESPUÉS de desbloquear, con
- * el keyguard ya abierto → no se activan los flags). Además, al cerrar la
- * pantalla de llamada, el JS llama setShowWhenLocked(false) y limpia los flags.
+ * ¿Por qué SIEMPRE (sin chequear el keyguard)? El chequeo
+ * `isKeyguardLocked == true` era una race condition: a veces el estado del
+ * keyguard no se refleja a tiempo en onCreate → los flags no se activaban → la
+ * app abría normal (~2 de 5 veces). Como el delay no importa y lo único que
+ * importa es CONFIABILIDAD, activamos siempre.
+ *
+ * ¿Es seguro dejarlo siempre activo? Sí, PORQUE el cleanup está garantizado:
+ * IncomingCallScreen llama setShowWhenLocked(false) de forma EXPLÍCITA en todos
+ * sus caminos de salida (atender, ignorar, snooze, ver pedido) además del
+ * desmontaje. Eso limpia estos flags y restaura el comportamiento normal, así
+ * que la app NO queda visible sobre el bloqueo tras cerrar la llamada.
  */
 const MARKER = 'Zafari-incoming-call-cold-start';
 
 const SNIPPET = `
     // ${MARKER}: arranque en frío con el celular bloqueado (FSI de llamada).
-    // Se limpia desde JS (LockScreen.setShowWhenLocked(false)) al cerrar la pantalla.
+    // Incondicional (evita la race del keyguard). Se limpia desde JS
+    // (LockScreen.setShowWhenLocked(false)) en todos los caminos de salida.
     try {
-      val zafariKeyguard = getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
-      if (zafariKeyguard?.isKeyguardLocked == true) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
-          setShowWhenLocked(true)
-          setTurnScreenOn(true)
-        }
-        window.addFlags(
-          android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        )
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
       }
+      window.addFlags(
+        android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+          android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+      )
     } catch (e: Exception) {}`;
 
 module.exports = function withIncomingCallActivity(config) {
