@@ -300,23 +300,86 @@ export async function savePushToken(meseroId: Id): Promise<void> {
  * lleguen más notificaciones. Borra por token (este device); si no se puede
  * obtener el token, borra todos los del mesero como fallback.
  */
+/**
+ * peek del token FCM con un timeout corto: en gama baja getToken() puede tardar
+ * por la red a Firebase. Si no resuelve a tiempo, devuelve null (y el llamador
+ * cae al borrado por mesero_id). NO pide permisos.
+ */
+async function peekFcmTokenWithTimeout(ms: number): Promise<string | null> {
+  return Promise.race<string | null>([
+    peekFcmToken(),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export async function deletePushToken(meseroId: Id): Promise<void> {
   try {
-    // peekFcmToken() NO pide permisos (a diferencia de getFcmDeviceToken); además
-    // le ponemos un timeout corto: en gama baja getToken() puede tardar mucho por
-    // la llamada de red a Firebase, y no queremos bloquear el logout. Si no
-    // resuelve a tiempo o es null, caemos al fallback: borrar por mesero_id.
-    const token = await Promise.race<string | null>([
-      peekFcmToken(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
-    ]);
-    const q = supabase.from('push_tokens').delete();
-    const { error } = token
-      ? await q.eq('token', token)
-      : await q.eq('mesero_id', meseroId);
-    if (error) console.warn('[notifications] No se pudo borrar el token:', error.message);
+    // peek rápido (1s) para borrar SOLO el token de este device. Lo lento es
+    // Firebase, no Supabase: por eso el peek tiene timeout corto pero el DELETE
+    // a Supabase SÍ se espera (es rápido y debe completarse).
+    const token = await peekFcmTokenWithTimeout(1000);
+
+    let filasPorToken = 0;
+    if (token) {
+      const { data, error } = await supabase
+        .from('push_tokens')
+        .delete()
+        .eq('token', token)
+        .select('id');
+      if (error) {
+        console.warn('[notifications] No se pudo borrar por token:', error.message);
+      } else {
+        filasPorToken = data?.length ?? 0;
+      }
+    }
+
+    // Si no había token o el borrado por token no tocó ninguna fila, borramos por
+    // mesero_id como fallback (evita dejar un token huérfano recibiendo pushes).
+    if (filasPorToken === 0) {
+      const { data, error } = await supabase
+        .from('push_tokens')
+        .delete()
+        .eq('mesero_id', meseroId)
+        .select('id');
+      if (error) {
+        console.warn('[notifications] No se pudo borrar por mesero_id:', error.message);
+        setPushDiag(`push_tokens delete ✗ (mesero_id=${meseroId})\n${error.message}`);
+      } else {
+        setPushDiag(
+          `push_tokens delete ✓ por mesero_id=${meseroId}\nfilas=${data?.length ?? 0}` +
+            (token ? ` (token no matcheó)` : ` (sin token)`),
+        );
+      }
+    } else {
+      setPushDiag(`push_tokens delete ✓ por token\nfilas=${filasPorToken} (mesero_id=${meseroId})`);
+    }
   } catch (err) {
     console.warn('[notifications] Error borrando token:', err);
+    setPushDiag(`push_tokens delete ✗ EXCEPCIÓN (mesero_id=${meseroId})\n${String(err)}`);
+  }
+}
+
+/**
+ * Red de seguridad: si llega un push estando DESLOGUEADO, borramos el token
+ * huérfano de este device (por token). No hay mesero_id disponible sin sesión, así
+ * que solo podemos borrar por token. Lo llaman el background handler / onMessage.
+ */
+export async function deleteOrphanPushToken(): Promise<void> {
+  try {
+    const token = await peekFcmTokenWithTimeout(1000);
+    if (!token) return;
+    const { data, error } = await supabase
+      .from('push_tokens')
+      .delete()
+      .eq('token', token)
+      .select('id');
+    if (error) {
+      console.warn('[notifications] No se pudo borrar token huérfano:', error.message);
+    } else {
+      setPushDiag(`push_tokens huérfano borrado\nfilas=${data?.length ?? 0} (sin sesión)`);
+    }
+  } catch (err) {
+    console.warn('[notifications] Error borrando token huérfano:', err);
   }
 }
 

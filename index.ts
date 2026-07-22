@@ -10,6 +10,8 @@ import {
 } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 import { setShowWhenLocked, isKeyguardLocked } from './modules/lock-screen';
+import { deleteOrphanPushToken } from './src/lib/notifications';
+import { hasActiveSession } from './src/lib/session';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
@@ -27,6 +29,13 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   try {
     const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
     if (call) {
+      // RED DE SEGURIDAD Esc1: si NO hay sesión activa (deslogueado), no mostramos
+      // nada aunque el push llegue por un token huérfano; además intentamos
+      // borrarlo de push_tokens para cortar los envíos futuros.
+      if (!(await hasActiveSession())) {
+        await deleteOrphanPushToken();
+        return;
+      }
       // Persistir ANTES de mostrar: el push REVIVE la app sin tap, así que
       // getInitialNotification devolverá null; esta es la única fuente segura
       // del call para arrancar en IncomingCall al montar (ver RootNavigator).

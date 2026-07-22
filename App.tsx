@@ -15,6 +15,8 @@ import {
   callToRoute,
 } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
+import { deleteOrphanPushToken } from './src/lib/notifications';
+import { hasActiveSession } from './src/lib/session';
 
 export default function App() {
   // Al abrir la app: buscar y DESCARGAR el OTA, pero NO reiniciar en caliente.
@@ -58,7 +60,14 @@ export default function App() {
       unsubOnMessage = messaging().onMessage(async (remoteMessage) => {
         try {
           const call = parseCallData(remoteMessage.data as Record<string, unknown> | undefined);
-          if (call) await displayIncomingCall(call);
+          if (!call) return;
+          // RED DE SEGURIDAD Esc1: deslogueado no debe ver la llamada aunque quede
+          // un token huérfano; de paso lo borramos de push_tokens.
+          if (!(await hasActiveSession())) {
+            await deleteOrphanPushToken();
+            return;
+          }
+          await displayIncomingCall(call);
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('[App] error en onMessage:', err);

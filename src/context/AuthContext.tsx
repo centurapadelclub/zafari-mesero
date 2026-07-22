@@ -8,6 +8,7 @@ import {
   stopForegroundService,
 } from '../lib/notifications';
 import { Id, Mesero } from '../types/db';
+import { SESSION_STORAGE_KEY } from '../lib/session';
 
 // Posibles nombres de la columna con el nombre de la zona (por si no es 'nombre').
 const ZONA_NAME_FIELDS = ['nombre', 'name', 'nombre_zona', 'zona', 'titulo', 'descripcion', 'label'];
@@ -37,7 +38,7 @@ interface AuthState {
   signOut: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'zafari.mesero.session';
+const STORAGE_KEY = SESSION_STORAGE_KEY;
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
@@ -185,16 +186,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Detener el Foreground Service: deslogueado no debe quedar corriendo.
     await stopForegroundService();
     // Esc1: borrar el token de este dispositivo para que no le lleguen más
-    // notificaciones. NO bloqueamos la salida esperando el borrado: en gama baja
-    // deletePushToken puede tardar (peek del token + red), así que lo disparamos
-    // fire-and-forget con catch y cerramos la sesión de inmediato.
+    // notificaciones. SÍ esperamos el borrado (el DELETE a Supabase es rápido y
+    // debe completarse, si no queda un token huérfano recibiendo pushes), pero
+    // con un techo de 3s vía Promise.race para que el logout nunca se cuelgue.
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
         const prev = JSON.parse(raw) as MeseroSession;
-        deletePushToken(prev.id).catch(() => {
-          // ignorar: el borrado corre en segundo plano
-        });
+        await Promise.race([
+          deletePushToken(prev.id).catch(() => {
+            // ignorar: el error ya se logea en deletePushToken
+          }),
+          new Promise((resolve) => setTimeout(resolve, 3000)),
+        ]);
       } catch {
         // ignorar
       }
