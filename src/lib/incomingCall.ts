@@ -48,7 +48,7 @@ async function buildIncomingCallNotification(call: CallData) {
   return {
     title:
       call.kind === 'pedido' ? `Nuevo pedido — ${call.ubicacion}` : `Llamado — ${call.ubicacion}`,
-    body: call.tipo ? `Tipo: ${call.tipo}` : 'Deslizá para atender',
+    body: call.tipo ? `Tipo: ${call.tipo}` : 'Desliza para atender',
     data: { kind: call.kind, id: call.id, ubicacion: call.ubicacion, tipo: call.tipo ?? '' },
     android: {
       channelId,
@@ -101,7 +101,7 @@ export async function displayHeadsUp(call: CallData): Promise<void> {
   await notifee.displayNotification({
     title:
       call.kind === 'pedido' ? `Nuevo pedido — ${call.ubicacion}` : `Llamado — ${call.ubicacion}`,
-    body: call.tipo ? `Tipo: ${call.tipo}` : 'Tocá para ver',
+    body: call.tipo ? `Tipo: ${call.tipo}` : 'Toca para ver',
     data: { kind: call.kind, id: call.id, ubicacion: call.ubicacion, tipo: call.tipo ?? '' },
     android: {
       channelId: CHANNEL_HEADSUP,

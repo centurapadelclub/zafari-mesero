@@ -40,8 +40,8 @@ export function NotificacionesBanner() {
     <View style={styles.card}>
       <Text style={styles.icon}>🔔</Text>
       <View style={styles.textWrap}>
-        <Text style={styles.title}>Activá las notificaciones</Text>
-        <Text style={styles.sub}>Recibí alertas cuando llegue un llamado</Text>
+        <Text style={styles.title}>Activa las notificaciones</Text>
+        <Text style={styles.sub}>Recibe alertas cuando llegue un llamado</Text>
       </View>
       <Pressable style={styles.btn} onPress={activar} disabled={busy}>
         <Text style={styles.btnText}>Activar</Text>

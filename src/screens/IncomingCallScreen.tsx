@@ -281,7 +281,7 @@ export function IncomingCallScreen() {
             <>
               <SlideToAct onAtender={onAtender} onSnooze={onSnooze} />
               <Text style={styles.hintIcon}>👆</Text>
-              <Text style={styles.hint}>‹‹  Deslizá el botón para atender  ››</Text>
+              <Text style={styles.hint}>‹‹  Desliza el botón para atender  ››</Text>
             </>
           )}
         </View>

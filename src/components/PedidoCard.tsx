@@ -98,7 +98,7 @@ export function PedidoCard({ pedido, items, onPress, onSetEstado, preparadoPor, 
           ))}
         </View>
       ) : (
-        <Text style={styles.itemsVacio}>Tocá para ver el detalle</Text>
+        <Text style={styles.itemsVacio}>Toca para ver el detalle</Text>
       )}
 
       {/* Total */}

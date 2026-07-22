@@ -16,7 +16,9 @@ import {
   requestNotificationPermissions,
   requestExactAlarmPermission,
   openPowerManagerSettings,
+  peekFcmToken,
 } from '../lib/notifications';
+import { getPushDiag, subscribePushDiag } from '../lib/pushDiag';
 import {
   canUseFullScreenIntent,
   openFullScreenIntentSettings,
@@ -97,6 +99,21 @@ const TONE_SOURCES: Record<TonePref, ReturnType<typeof require>> = {
   alarma: require('../../assets/alarma.wav'),
 };
 
+/** OTA id corto (o 'embedded'/'—'), leído de forma segura. */
+function otaIdCorto(): string {
+  try {
+    if (Updates.isEmbeddedLaunch) return 'embedded';
+    return (Updates.updateId ?? 'embedded').slice(0, 8);
+  } catch {
+    return '—';
+  }
+}
+
+/** Formatea un permiso booleano/null para el diagnóstico. */
+function fmtBool(b: boolean | null): string {
+  return b === true ? 'sí' : b === false ? 'no' : 'no se puede leer';
+}
+
 export function PreferencesScreen() {
   const [pref, setPref] = useState<SoundPref | null>(null);
   const [tono, setTono] = useState<TonePref | null>(null);
@@ -139,10 +156,29 @@ export function PreferencesScreen() {
     setPerms(next);
   };
 
+  // --- Diagnóstico (solo lectura, para depurar la instalación en cada teléfono) ---
+  const [showDiag, setShowDiag] = useState(false);
+  const [diag, setDiag] = useState<string>(getPushDiag());
+  const [tokenPeek, setTokenPeek] = useState<string>('leyendo…');
+
+  const refrescarDiag = async () => {
+    setDiag(getPushDiag());
+    try {
+      const t = await peekFcmToken();
+      setTokenPeek(t ? `${t.slice(0, 10)}… (${t.length} chars)` : 'sin token');
+    } catch {
+      setTokenPeek('error al leer');
+    }
+  };
+
   useEffect(() => {
     getSoundPref().then(setPref);
     getTonePref().then(setTono);
     leerPerms();
+    refrescarDiag();
+    // Mantener el texto de diagnóstico en vivo si savePushToken vuelve a escribir.
+    const unsub = subscribePushDiag(setDiag);
+    return unsub;
   }, []);
 
   const elegir = async (value: SoundPref) => {
@@ -178,7 +214,7 @@ export function PreferencesScreen() {
       const r = await Updates.checkForUpdateAsync();
       setOtaAvailable(r.isAvailable);
       setOtaMsg(
-        r.isAvailable ? 'Hay una actualización disponible' : 'Ya tenés la versión más reciente',
+        r.isAvailable ? 'Hay una actualización disponible' : 'Ya tienes la versión más reciente',
       );
     } catch (e) {
       setOtaAvailable(false);
@@ -232,7 +268,7 @@ export function PreferencesScreen() {
         })}
 
         <Text style={[styles.seccion, { marginTop: 24 }]}>Tono de la llamada</Text>
-        <Text style={styles.nota}>Tocá una opción para escuchar una vista previa.</Text>
+        <Text style={styles.nota}>Toca una opción para escuchar una vista previa.</Text>
 
         {TONOS.map((o) => {
           const activa = tono === o.value;
@@ -256,8 +292,8 @@ export function PreferencesScreen() {
 
         <Text style={[styles.seccion, { marginTop: 24 }]}>Permisos</Text>
         <Text style={styles.nota}>
-          Configuración inicial del dispositivo (una sola vez). Tocá "Abrir ajuste" en cada uno y
-          activalo; después volvé y tocá "Volver a revisar".
+          Configuración inicial del dispositivo (una sola vez). Toca "Abrir ajuste" en cada uno y
+          actívalo; después vuelve y toca "Volver a revisar".
         </Text>
 
         <PermRow
@@ -302,7 +338,7 @@ export function PreferencesScreen() {
         />
         <PermRow
           titulo="Optimización de batería"
-          desc="Excluí la app para que el sistema no la cierre en segundo plano."
+          desc="Excluye la app para que el sistema no la cierre en segundo plano."
           estado={perms.battery}
           onAbrir={() => {
             openPowerManagerSettings().catch(() => {});
@@ -349,6 +385,43 @@ export function PreferencesScreen() {
             </Pressable>
           </>
         ) : null}
+
+        <Text style={[styles.seccion, { marginTop: 24 }]}>Diagnóstico</Text>
+        <Pressable
+          style={[styles.btn, styles.btnRevisar]}
+          onPress={() => setShowDiag((v) => !v)}
+        >
+          <Text style={styles.btnRevisarText}>
+            {showDiag ? 'Ocultar diagnóstico' : 'Mostrar diagnóstico'}
+          </Text>
+        </Pressable>
+
+        {showDiag ? (
+          <View style={styles.diagBox}>
+            <Text style={styles.diagLabel}>Token FCM (peek)</Text>
+            <Text style={styles.diagValue}>{tokenPeek}</Text>
+
+            <Text style={styles.diagLabel}>Registro push (último)</Text>
+            <Text style={styles.diagValue}>{diag || '—'}</Text>
+
+            <Text style={styles.diagLabel}>Permisos (lectura nativa)</Text>
+            <Text style={styles.diagValue}>
+              Pantalla completa (FSI): {fmtBool(perms.fsi)}
+              {'\n'}Mostrar sobre otras apps: {fmtBool(perms.overlay)}
+              {'\n'}Batería exenta: {fmtBool(perms.battery)}
+            </Text>
+
+            <Text style={styles.diagLabel}>OTA</Text>
+            <Text style={styles.diagValue}>{otaIdCorto()}</Text>
+
+            <Pressable
+              style={[styles.btn, styles.btnRevisar, { marginTop: 10, marginBottom: 0 }]}
+              onPress={refrescarDiag}
+            >
+              <Text style={styles.btnRevisarText}>Refrescar diagnóstico</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -363,6 +436,15 @@ const styles = StyleSheet.create({
   fsiUnknown: { color: '#888' },
   btnRevisar: { backgroundColor: '#eeeeee' },
   btnRevisarText: { color: '#333', fontSize: 15, fontWeight: '700' },
+  diagBox: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12 },
+  diagLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#888',
+    textTransform: 'uppercase',
+    marginTop: 10,
+  },
+  diagValue: { fontSize: 13, color: '#333', marginTop: 2, fontFamily: 'monospace' },
   permRow: {
     flexDirection: 'row',
     alignItems: 'center',

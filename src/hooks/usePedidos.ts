@@ -213,7 +213,7 @@ export function usePedidos(zonas: string[], meseroId: Id) {
         // Sin error pero 0 filas => la política RLS de UPDATE bloqueó el cambio.
         setError(
           'La base de datos rechazó el cambio de estado (permisos RLS de UPDATE en "pedidos"). ' +
-            'Agregá una policy de UPDATE para el rol anon.',
+            'Agrega una policy de UPDATE para el rol anon.',
         );
         await fetchActivos();
         await fetchHistorial();

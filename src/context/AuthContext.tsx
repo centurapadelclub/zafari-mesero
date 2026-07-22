@@ -105,11 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Registrar/actualizar el token FCM cuando hay un mesero logueado
-  // (cubre tanto el login como la restauración de sesión al reabrir la app).
+  // Registrar/actualizar el token FCM cuando hay un mesero logueado. Corre en CADA
+  // arranque con sesión (login y restauración al reabrir la app), no solo en el
+  // login: si el registro falló antes (permiso no concedido aún, sin red, Play
+  // Services lento) esto lo reintenta. El upsert por onConflict 'token' es
+  // idempotente. No bloqueante y con catch para no frenar el arranque.
   useEffect(() => {
     if (session?.id == null) return;
-    savePushToken(session.id);
+    savePushToken(session.id).catch(() => {
+      // el error ya se registra en setPushDiag dentro de savePushToken
+    });
     // Foreground Service: mantener el proceso vivo para recibir llamados aunque
     // la app esté en segundo plano (estilo WhatsApp). Delay de 500 ms para dar
     // tiempo a que notifee termine de inicializarse antes de arrancar el service.
@@ -146,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (nombre: string, pin: string) => {
     const nombreLimpio = nombre.trim();
-    if (!nombreLimpio) return { ok: false, error: 'Ingresá tu nombre.' };
+    if (!nombreLimpio) return { ok: false, error: 'Ingresa tu nombre.' };
     if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'El PIN debe tener 4 dígitos.' };
 
     // 1) Validar contra `meseros` (nombre + pin).
@@ -164,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const mesero = meseros?.[0];
     if (!mesero) return { ok: false, error: 'Nombre o PIN incorrecto.' };
     if (mesero.activo === false) {
-      return { ok: false, error: 'Tu usuario está inactivo. Hablá con el encargado.' };
+      return { ok: false, error: 'Tu usuario está inactivo. Habla con el encargado.' };
     }
 
     // 2) Zonas asignadas: asignaciones.zona_id → zonas.nombre

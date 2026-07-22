@@ -77,19 +77,36 @@ export function LoginScreen() {
       setLoadingMeseros(false);
       return;
     }
-    const { data, error: err } = await supabase
-      .from('meseros')
-      .select('id, nombre')
-      .eq('activo', true)
-      .order('nombre', { ascending: true })
-      .returns<MeseroOption[]>();
+    try {
+      // En gama baja / red intermitente la petición puede quedar colgada sin
+      // resolver (RN no aplica timeout por defecto), dejando el spinner infinito.
+      // Timeout de 8s vía Promise.race: si no responde, tiramos error y el finally
+      // libera el loading para poder reintentar.
+      const query = supabase
+        .from('meseros')
+        .select('id, nombre')
+        .eq('activo', true)
+        .order('nombre', { ascending: true })
+        .returns<MeseroOption[]>();
+      const { data, error: err } = (await Promise.race([
+        query,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ])) as { data: MeseroOption[] | null; error: unknown };
 
-    if (err) {
-      setMeserosError('No se pudo cargar la lista de meseros.');
-    } else {
-      setMeseros(data ?? []);
+      if (err) {
+        setMeserosError('No se pudo cargar la lista de meseros.');
+      } else {
+        setMeseros(data ?? []);
+      }
+    } catch (e) {
+      setMeserosError(
+        (e as Error)?.message === 'timeout'
+          ? 'La conexión tardó demasiado.'
+          : 'No se pudo cargar la lista de meseros.',
+      );
+    } finally {
+      setLoadingMeseros(false);
     }
-    setLoadingMeseros(false);
   };
 
   useEffect(() => {
@@ -100,7 +117,7 @@ export function LoginScreen() {
     if (loading) return;
     setError(null);
     if (!nombre) {
-      setError('Seleccioná tu nombre.');
+      setError('Selecciona tu nombre.');
       return;
     }
     setLoading(true);
@@ -142,13 +159,13 @@ export function LoginScreen() {
             disabled={loading}
           >
             <Text style={[styles.selectorText, !nombre && styles.selectorPlaceholder]}>
-              {nombre || 'Seleccioná tu nombre'}
+              {nombre || 'Selecciona tu nombre'}
             </Text>
             <Text style={styles.chevron}>▾</Text>
           </Pressable>
           {meserosError ? (
             <Pressable onPress={cargarMeseros}>
-              <Text style={styles.reintentar}>{meserosError} Tocá para reintentar.</Text>
+              <Text style={styles.reintentar}>{meserosError} Toca para reintentar.</Text>
             </Pressable>
           ) : null}
 
@@ -192,7 +209,7 @@ export function LoginScreen() {
         <Pressable style={styles.backdrop} onPress={() => setPickerOpen(false)} />
         <View style={styles.sheet}>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Elegí tu nombre</Text>
+            <Text style={styles.sheetTitle}>Elige tu nombre</Text>
             <Pressable onPress={cargarMeseros} hitSlop={8}>
               <Text style={styles.refresh}>↻</Text>
             </Pressable>
