@@ -302,7 +302,14 @@ export async function savePushToken(meseroId: Id): Promise<void> {
  */
 export async function deletePushToken(meseroId: Id): Promise<void> {
   try {
-    const token = await getFcmDeviceToken();
+    // peekFcmToken() NO pide permisos (a diferencia de getFcmDeviceToken); además
+    // le ponemos un timeout corto: en gama baja getToken() puede tardar mucho por
+    // la llamada de red a Firebase, y no queremos bloquear el logout. Si no
+    // resuelve a tiempo o es null, caemos al fallback: borrar por mesero_id.
+    const token = await Promise.race<string | null>([
+      peekFcmToken(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ]);
     const q = supabase.from('push_tokens').delete();
     const { error } = token
       ? await q.eq('token', token)

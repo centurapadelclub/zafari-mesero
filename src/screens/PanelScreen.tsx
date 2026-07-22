@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -61,6 +61,14 @@ export function PanelScreen() {
 
   const [tab, setTab] = useState<Tab>('llamados');
   const [busyId, setBusyId] = useState<Id | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  // Evita que un doble tap sobre "Salir" dispare el logout varias veces.
+  const onSalir = useCallback(() => {
+    if (signingOut) return;
+    setSigningOut(true);
+    signOut().catch(() => setSigningOut(false));
+  }, [signingOut, signOut]);
 
   const [itemsMap, setItemsMap] = useState<Record<string, PedidoItem[]>>({});
   const [detalle, setDetalle] = useState<Pedido | null>(null);
@@ -167,8 +175,13 @@ export function PanelScreen() {
           >
             <Text style={styles.gear}>⚙️</Text>
           </Pressable>
-          <Pressable onPress={() => signOut()} style={styles.salirBtn} hitSlop={8}>
-            <Text style={styles.salirText}>Salir</Text>
+          <Pressable
+            onPress={onSalir}
+            disabled={signingOut}
+            style={[styles.salirBtn, signingOut && styles.salirBtnDisabled]}
+            hitSlop={8}
+          >
+            <Text style={styles.salirText}>{signingOut ? 'Saliendo…' : 'Salir'}</Text>
           </Pressable>
         </View>
       </View>
@@ -377,6 +390,7 @@ const styles = StyleSheet.create({
   headerBtn: { padding: 6 },
   gear: { fontSize: 20 },
   salirBtn: { paddingVertical: 6, paddingHorizontal: 8 },
+  salirBtnDisabled: { opacity: 0.5 },
   salirText: { color: colors.textDim, fontSize: 15, fontWeight: '700' },
   tabs: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 14 },
   tabWrap: { flex: 1, position: 'relative' },

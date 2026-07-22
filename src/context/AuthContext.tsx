@@ -184,13 +184,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     // Detener el Foreground Service: deslogueado no debe quedar corriendo.
     await stopForegroundService();
-    // Esc1: borrar el token de este dispositivo ANTES de limpiar la sesión,
-    // para que no le lleguen más notificaciones estando deslogueado.
+    // Esc1: borrar el token de este dispositivo para que no le lleguen más
+    // notificaciones. NO bloqueamos la salida esperando el borrado: en gama baja
+    // deletePushToken puede tardar (peek del token + red), así que lo disparamos
+    // fire-and-forget con catch y cerramos la sesión de inmediato.
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
         const prev = JSON.parse(raw) as MeseroSession;
-        await deletePushToken(prev.id);
+        deletePushToken(prev.id).catch(() => {
+          // ignorar: el borrado corre en segundo plano
+        });
       } catch {
         // ignorar
       }
