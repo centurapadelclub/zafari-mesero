@@ -8,7 +8,18 @@ import {
   stopForegroundService,
 } from '../lib/notifications';
 import { Id, Mesero } from '../types/db';
-import { SESSION_STORAGE_KEY } from '../lib/session';
+import { SESSION_STORAGE_KEY, getDeviceId } from '../lib/session';
+
+/** Ventana tras la cual una sesión sin heartbeat se considera caducada (12 h). */
+const SESSION_STALE_MS = 12 * 60 * 60 * 1000;
+
+/** Envuelve una promesa con timeout para que la red lenta no cuelgue el login. */
+function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p as Promise<T>,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
 
 // Posibles nombres de la columna con el nombre de la zona (por si no es 'nombre').
 const ZONA_NAME_FIELDS = ['nombre', 'name', 'nombre_zona', 'zona', 'titulo', 'descripcion', 'label'];
@@ -31,10 +42,16 @@ export interface MeseroSession {
   zonas: string[]; // nombres de esas zonas (zonas.nombre) — se usan para filtrar el feed
 }
 
+interface SignInResult {
+  ok: boolean;
+  error?: string;
+  otherDevice?: boolean; // true = bloqueado por sesión activa en otro equipo
+}
+
 interface AuthState {
   session: MeseroSession | null;
   loading: boolean;
-  signIn: (nombre: string, pin: string) => Promise<{ ok: boolean; error?: string }>;
+  signIn: (nombre: string, pin: string, opts?: { force?: boolean }) => Promise<SignInResult>;
   signOut: () => Promise<void>;
 }
 
@@ -115,6 +132,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     savePushToken(session.id).catch(() => {
       // el error ya se registra en setPushDiag dentro de savePushToken
     });
+    // Heartbeat: refrescar session_at en cada arranque con sesión, SOLO si este
+    // equipo sigue siendo el dueño. Así una sesión en uso no caduca (12 h), pero
+    // una abandonada sí. No bloqueante y con catch.
+    (async () => {
+      try {
+        const deviceId = await getDeviceId();
+        await supabase
+          .from('meseros')
+          .update({ session_at: new Date().toISOString() })
+          .eq('id', session.id)
+          .eq('session_device_id', deviceId);
+      } catch {
+        // ignorar: el heartbeat es best-effort
+      }
+    })();
     // Foreground Service: mantener el proceso vivo para recibir llamados aunque
     // la app esté en segundo plano (estilo WhatsApp). Delay de 500 ms para dar
     // tiempo a que notifee termine de inicializarse antes de arrancar el service.
@@ -149,43 +181,89 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [session?.id]);
 
-  const signIn = useCallback(async (nombre: string, pin: string) => {
-    const nombreLimpio = nombre.trim();
-    if (!nombreLimpio) return { ok: false, error: 'Ingresa tu nombre.' };
-    if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'El PIN debe tener 4 dígitos.' };
+  const signIn = useCallback(
+    async (nombre: string, pin: string, opts?: { force?: boolean }): Promise<SignInResult> => {
+      const nombreLimpio = nombre.trim();
+      if (!nombreLimpio) return { ok: false, error: 'Ingresa tu nombre.' };
+      if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'El PIN debe tener 4 dígitos.' };
 
-    // 1) Validar contra `meseros` (nombre + pin).
-    const { data: meseros, error } = await supabase
-      .from('meseros')
-      .select('id, nombre, pin, rol, activo')
-      .ilike('nombre', nombreLimpio)
-      .eq('pin', pin)
-      .limit(1)
-      .returns<Mesero[]>();
+      try {
+        // 1) Validar contra `meseros` (nombre + pin). Con timeout para no colgar.
+        const { data: meseros, error } = await withTimeout(
+          supabase
+            .from('meseros')
+            .select('id, nombre, pin, rol, activo, session_device_id, session_at')
+            .ilike('nombre', nombreLimpio)
+            .eq('pin', pin)
+            .limit(1)
+            .returns<Mesero[]>(),
+          8000,
+        );
 
-    if (error) {
-      return { ok: false, error: 'No se pudo conectar con el servidor.' };
-    }
-    const mesero = meseros?.[0];
-    if (!mesero) return { ok: false, error: 'Nombre o PIN incorrecto.' };
-    if (mesero.activo === false) {
-      return { ok: false, error: 'Tu usuario está inactivo. Habla con el encargado.' };
-    }
+        if (error) {
+          return { ok: false, error: 'No se pudo conectar con el servidor.' };
+        }
+        const mesero = meseros?.[0];
+        if (!mesero) return { ok: false, error: 'Nombre o PIN incorrecto.' };
+        if (mesero.activo === false) {
+          return { ok: false, error: 'Tu usuario está inactivo. Habla con el encargado.' };
+        }
 
-    // 2) Zonas asignadas: asignaciones.zona_id → zonas.nombre
-    const { zonaIds, zonas } = await resolveZonasForMesero(mesero.id);
+        // 2) Una sesión por equipo: comparar el dispositivo actual con el que tiene
+        //    la sesión activa del mesero.
+        const deviceId = await getDeviceId();
+        const otroEquipo =
+          !!mesero.session_device_id && mesero.session_device_id !== deviceId;
+        if (otroEquipo && !opts?.force) {
+          const sessionAt = mesero.session_at ? Date.parse(mesero.session_at) : 0;
+          const vigente = Number.isFinite(sessionAt) && Date.now() - sessionAt < SESSION_STALE_MS;
+          if (vigente) {
+            // Sesión activa reciente en otro teléfono → bloquear (con salida de
+            // emergencia: el llamador puede reintentar con force).
+            return { ok: false, error: 'Sesión activa en otro teléfono', otherDevice: true };
+          }
+          // Sesión caducada (> 12 h sin heartbeat) → tomamos el control.
+        }
 
-    const newSession: MeseroSession = {
-      id: mesero.id,
-      nombre: mesero.nombre,
-      rol: mesero.rol ?? null,
-      zonaIds,
-      zonas,
-    };
-    setSession(newSession);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
-    return { ok: true };
-  }, []);
+        // 3) Zonas asignadas: asignaciones.zona_id → zonas.nombre
+        const { zonaIds, zonas } = await resolveZonasForMesero(mesero.id);
+
+        // 4) Reclamar la sesión para ESTE equipo (session_device_id + session_at).
+        try {
+          await withTimeout(
+            supabase
+              .from('meseros')
+              .update({ session_device_id: deviceId, session_at: new Date().toISOString() })
+              .eq('id', mesero.id),
+            8000,
+          );
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[auth] no se pudo reclamar la sesión:', e);
+        }
+
+        const newSession: MeseroSession = {
+          id: mesero.id,
+          nombre: mesero.nombre,
+          rol: mesero.rol ?? null,
+          zonaIds,
+          zonas,
+        };
+        setSession(newSession);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
+        return { ok: true };
+      } catch (e) {
+        return {
+          ok: false,
+          error:
+            (e as Error)?.message === 'timeout'
+              ? 'La conexión tardó demasiado. Intenta de nuevo.'
+              : 'No se pudo conectar con el servidor.',
+        };
+      }
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
     // Detener el Foreground Service: deslogueado no debe quedar corriendo.
@@ -198,10 +276,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (raw) {
       try {
         const prev = JSON.parse(raw) as MeseroSession;
+        // Liberar la sesión de una-por-equipo: poner en null session_device_id/at,
+        // SOLO si el equipo con la sesión sigue siendo este (para no pisar una
+        // sesión que otro teléfono ya tomó). Con timeout para no colgar el logout.
+        const deviceId = await getDeviceId();
         await Promise.race([
-          deletePushToken(prev.id).catch(() => {
-            // ignorar: el error ya se logea en deletePushToken
-          }),
+          Promise.all([
+            deletePushToken(prev.id).catch(() => {}),
+            (async () => {
+              try {
+                await supabase
+                  .from('meseros')
+                  .update({ session_device_id: null, session_at: null })
+                  .eq('id', prev.id)
+                  .eq('session_device_id', deviceId);
+              } catch {
+                // best-effort: si falla, la sesión caduca sola a las 12 h
+              }
+            })(),
+          ]),
           new Promise((resolve) => setTimeout(resolve, 3000)),
         ]);
       } catch {

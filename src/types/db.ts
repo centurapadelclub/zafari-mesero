@@ -36,6 +36,8 @@ export interface Mesero {
   pin: string;
   rol?: string | null;
   activo?: boolean | null;
+  session_device_id?: string | null; // equipo con sesión activa (una por mesero)
+  session_at?: string | null; // última actividad de esa sesión (heartbeat / login)
 }
 
 /** Tabla: zonas */

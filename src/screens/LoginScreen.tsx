@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -33,6 +34,7 @@ export function LoginScreen() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [otherDevice, setOtherDevice] = useState(false);
   const pinRef = useRef<TextInput>(null);
 
   // Selector de nombre (meseros activos desde Supabase)
@@ -113,20 +115,49 @@ export function LoginScreen() {
     cargarMeseros();
   }, []);
 
+  const intentarLogin = async (force: boolean) => {
+    setLoading(true);
+    const res = await signIn(nombre, pin, { force });
+    setLoading(false);
+    if (!res.ok) {
+      setError(res.error ?? 'No se pudo iniciar sesión.');
+      setOtherDevice(!!res.otherDevice);
+      // Si el bloqueo es por otro equipo, conservamos el PIN para el botón de
+      // emergencia; en cualquier otro error lo limpiamos.
+      if (!res.otherDevice) setPin('');
+    }
+  };
+
   const onSubmit = async () => {
     if (loading) return;
     setError(null);
+    setOtherDevice(false);
     if (!nombre) {
       setError('Selecciona tu nombre.');
       return;
     }
-    setLoading(true);
-    const res = await signIn(nombre, pin);
-    setLoading(false);
-    if (!res.ok) {
-      setError(res.error ?? 'No se pudo iniciar sesión.');
-      setPin('');
-    }
+    await intentarLogin(false);
+  };
+
+  // Salida de emergencia: toma el control aunque haya sesión en otro teléfono.
+  const onForzarLogin = () => {
+    if (loading) return;
+    Alert.alert(
+      'Iniciar sesión aquí',
+      'Se cerrará la sesión en el otro teléfono. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sí, continuar',
+          style: 'destructive',
+          onPress: () => {
+            setError(null);
+            setOtherDevice(false);
+            intentarLogin(true);
+          },
+        },
+      ],
+    );
   };
 
   const seleccionar = (m: MeseroOption) => {
@@ -197,6 +228,12 @@ export function LoginScreen() {
               <Text style={styles.botonText}>Entrar</Text>
             )}
           </Pressable>
+
+          {otherDevice ? (
+            <Pressable style={styles.forzarBtn} onPress={onForzarLogin} disabled={loading}>
+              <Text style={styles.forzarText}>Iniciar sesión aquí de todos modos</Text>
+            </Pressable>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
 
@@ -282,6 +319,15 @@ const styles = StyleSheet.create({
   },
   botonPressed: { backgroundColor: '#B71C1C' },
   botonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  forzarBtn: {
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: '#D32F2F',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  forzarText: { color: '#D32F2F', fontSize: 15, fontWeight: '700' },
   version: {
     position: 'absolute',
     bottom: 34,
