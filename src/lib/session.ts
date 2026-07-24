@@ -53,3 +53,16 @@ export async function hasActiveSession(): Promise<boolean> {
     return false;
   }
 }
+
+/** mesero_id de la sesión guardada, o null si no hay sesión. Sirve fuera de React
+ *  (p. ej. el onTokenRefresh de FCM en index.ts). */
+export async function getStoredMeseroId(): Promise<Id | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as StoredSessionLite;
+    return s.id ?? null;
+  } catch {
+    return null;
+  }
+}

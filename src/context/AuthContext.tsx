@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import {
   deletePushToken,
   savePushToken,
+  resyncPushTokenIfChanged,
   startForegroundService,
   stopForegroundService,
 } from '../lib/notifications';
@@ -187,10 +188,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Verificar propiedad cada vez que la app vuelve al foreground.
+  // Al volver al foreground: verificar propiedad de sesión Y re-sincronizar el
+  // token FCM (por si rotó estando en background / volvió el wifi). Ambos leen la
+  // sesión vía ref, no bloqueantes.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') verifySessionOwnership();
+      if (state !== 'active') return;
+      verifySessionOwnership();
+      const sid = sessionRef.current?.id;
+      if (sid != null) resyncPushTokenIfChanged(sid).catch(() => {});
     });
     return () => sub.remove();
   }, [verifySessionOwnership]);

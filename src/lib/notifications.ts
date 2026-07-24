@@ -1,4 +1,5 @@
 import { Platform, Vibration } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import notifee, {
   AndroidImportance,
@@ -256,7 +257,58 @@ export function fcmProjectInfo(): string {
   }
 }
 
-/** Esc1: guarda el token (upsert por token) al loguear. */
+// Último token que registramos en push_tokens (para detectar rotaciones de FCM y
+// limpiar el token anterior sin dejar huérfanos).
+const LAST_TOKEN_KEY = 'zafari.last_registered_token';
+
+/**
+ * Núcleo del registro: upsert del token + limpieza del token anterior + guardado
+ * del último registrado. `reason` va al diagnóstico para verlo en el panel.
+ */
+async function registerToken(meseroId: Id, token: string, reason: string): Promise<void> {
+  const tok10 = token.slice(0, 10);
+  // .select() para saber cuántas filas escribió realmente (y forzar el error de
+  // RLS/tipo si lo hay).
+  const { data, error } = await supabase
+    .from('push_tokens')
+    .upsert(
+      { mesero_id: meseroId, token, platform: Platform.OS, updated_at: new Date().toISOString() },
+      { onConflict: 'token' },
+    )
+    .select('id');
+  if (error) {
+    console.warn('[notifications] No se pudo guardar el token:', error.message);
+    setPushDiag(
+      `push_tokens ✗ ERROR (${reason})\nmesero_id=${meseroId}\ntoken=${tok10}…\nmsg: ${error.message}` +
+        (error.details ? `\ndetails: ${error.details}` : '') +
+        (error.hint ? `\nhint: ${error.hint}` : '') +
+        (error.code ? `\ncode: ${error.code}` : '') +
+        `\n${fcmProjectInfo()}`,
+    );
+    return;
+  }
+  // Éxito: limpiar el token ANTERIOR (si cambió) para no dejar huérfanos, y guardar
+  // el nuevo como "último registrado".
+  try {
+    const prev = await AsyncStorage.getItem(LAST_TOKEN_KEY);
+    if (prev && prev !== token) {
+      await supabase.from('push_tokens').delete().eq('token', prev);
+    } else if (!prev) {
+      // No sabíamos el token anterior: limpiar cualquier token viejo de este mesero
+      // que no sea el nuevo (un mesero = un dispositivo).
+      await supabase.from('push_tokens').delete().eq('mesero_id', meseroId).neq('token', token);
+    }
+    await AsyncStorage.setItem(LAST_TOKEN_KEY, token);
+  } catch {
+    // best-effort: la limpieza no debe romper el registro
+  }
+  setPushDiag(
+    `push_tokens ✓ OK (${reason})\nmesero_id=${meseroId}\ntoken=${tok10}…\nfilas=${data?.length ?? 0}` +
+      `\n${fcmProjectInfo()}`,
+  );
+}
+
+/** Esc1: guarda el token (upsert por token) al loguear / arrancar. */
 export async function savePushToken(meseroId: Id): Promise<void> {
   try {
     const token = await getFcmDeviceToken();
@@ -264,34 +316,40 @@ export async function savePushToken(meseroId: Id): Promise<void> {
       setPushDiag(`push_tokens: sin token FCM (mesero_id=${meseroId})\n${fcmProjectInfo()}`);
       return;
     }
-    const tok10 = token.slice(0, 10);
-    // .select() para saber cuántas filas escribió realmente (y forzar el error
-    // de RLS/tipo si lo hay). Mostramos el resultado exacto en el panel.
-    const { data, error } = await supabase
-      .from('push_tokens')
-      .upsert(
-        { mesero_id: meseroId, token, platform: Platform.OS, updated_at: new Date().toISOString() },
-        { onConflict: 'token' },
-      )
-      .select('id');
-    if (error) {
-      console.warn('[notifications] No se pudo guardar el token:', error.message);
-      setPushDiag(
-        `push_tokens ✗ ERROR\nmesero_id=${meseroId}\ntoken=${tok10}…\nmsg: ${error.message}` +
-          (error.details ? `\ndetails: ${error.details}` : '') +
-          (error.hint ? `\nhint: ${error.hint}` : '') +
-          (error.code ? `\ncode: ${error.code}` : '') +
-          `\n${fcmProjectInfo()}`,
-      );
-    } else {
-      setPushDiag(
-        `push_tokens ✓ OK\nmesero_id=${meseroId}\ntoken=${tok10}…\nfilas=${data?.length ?? 0}` +
-          `\n${fcmProjectInfo()}`,
-      );
-    }
+    await registerToken(meseroId, token, 'login/arranque');
   } catch (err) {
     console.warn('[notifications] Error registrando token:', err);
     setPushDiag(`push_tokens ✗ EXCEPCIÓN (mesero_id=${meseroId})\n${String(err)}`);
+  }
+}
+
+/**
+ * onTokenRefresh: Firebase rotó el token (frecuente tras cambios de red). Guarda el
+ * nuevo en push_tokens y limpia el anterior. Lo llama el listener global de
+ * index.ts SOLO si hay sesión.
+ */
+export async function handleTokenRefresh(meseroId: Id, newToken: string): Promise<void> {
+  try {
+    await registerToken(meseroId, newToken, 'refresh');
+  } catch (err) {
+    console.warn('[notifications] Error en token refresh:', err);
+  }
+}
+
+/**
+ * Re-sincroniza al volver a foreground: si el token ACTUAL (peek, sin pedir
+ * permisos) difiere del último registrado, lo re-registra. Cubre "volvió el wifi y
+ * el mesero reabre la app" sin depender de netinfo. No pide permisos.
+ */
+export async function resyncPushTokenIfChanged(meseroId: Id): Promise<void> {
+  try {
+    const token = await peekFcmToken();
+    if (!token) return;
+    const last = await AsyncStorage.getItem(LAST_TOKEN_KEY);
+    if (token === last) return; // sin cambios: nada que hacer
+    await registerToken(meseroId, token, 'foreground');
+  } catch (err) {
+    console.warn('[notifications] Error en resync foreground:', err);
   }
 }
 

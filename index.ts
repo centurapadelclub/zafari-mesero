@@ -10,8 +10,8 @@ import {
 } from './src/lib/incomingCall';
 import { navigateToIncomingCall } from './src/navigation/navigationRef';
 import { setShowWhenLocked, isKeyguardLocked } from './modules/lock-screen';
-import { deleteOrphanPushToken } from './src/lib/notifications';
-import { hasActiveSession } from './src/lib/session';
+import { deleteOrphanPushToken, handleTokenRefresh } from './src/lib/notifications';
+import { hasActiveSession, getStoredMeseroId } from './src/lib/session';
 import { installGlobalErrorHandler } from './src/lib/errorReporting';
 
 import App from './App';
@@ -98,6 +98,27 @@ try {
 
 // Capturar errores JS no atrapados (los logea en vez de cerrar en silencio).
 installGlobalErrorHandler();
+
+/**
+ * onTokenRefresh: FCM rota el token (frecuente tras cambios de red, sobre todo en
+ * gama baja con wifi que se va y vuelve). Registrado a nivel global para que viva
+ * mientras corre la app (también en background). Si hay sesión, guardamos el nuevo
+ * token en push_tokens y limpiamos el anterior; sin sesión, no guardamos nada.
+ */
+try {
+  messaging().onTokenRefresh(async (newToken) => {
+    try {
+      const meseroId = await getStoredMeseroId();
+      if (meseroId != null) await handleTokenRefresh(meseroId, newToken);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[index] onTokenRefresh error:', err);
+    }
+  });
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('[index] messaging().onTokenRefresh no disponible:', err);
+}
 
 /** Handler de eventos de notifee en segundo plano (envuelto por seguridad). */
 try {
