@@ -12,6 +12,7 @@ import { IncomingCallScreen } from '../screens/IncomingCallScreen';
 import { RootStackParamList } from '../types/db';
 import { navigationRef, flushPendingCall, clearPendingCall } from './navigationRef';
 import { callToRoute, parseCallData, takePendingIncomingCall } from '../lib/incomingCall';
+import { useResolvedCallWatcher } from '../hooks/useResolvedCallWatcher';
 import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -54,6 +55,10 @@ export function RootNavigator() {
   const { session, loading } = useAuth();
   // undefined = todavía resolviendo la notificación inicial; null = no hubo.
   const [initialCall, setInitialCall] = useState<CallRoute | null | undefined>(undefined);
+
+  // Watcher global: cuando otro mesero atiende un llamado/pedido, cancela la
+  // notificación y cierra la IncomingCallScreen en este teléfono. Solo con sesión.
+  useResolvedCallWatcher(!!session);
 
   // Resolvemos la notificación que abrió la app (app CERRADA/quit) ANTES de
   // renderizar el stack, para poder usarla como ruta inicial. Cubrimos las dos

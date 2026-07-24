@@ -27,6 +27,12 @@ export interface CallData {
   tipo?: string | null;
 }
 
+/** Id determinístico de la notificación de una llamada, para poder cancelarla
+ *  después (cuando otro mesero la atiende). Mismo id para el display y el snooze. */
+export function callNotificationId(kind: CallData['kind'], id: string | number): string {
+  return `call-${kind}-${id}`;
+}
+
 /** Extrae los datos de la llamada desde el `data` de una notificación (o null). */
 export function parseCallData(data?: Record<string, unknown> | null): CallData | null {
   if (!data) return null;
@@ -46,6 +52,7 @@ export function parseCallData(data?: Record<string, unknown> | null): CallData |
 async function buildIncomingCallNotification(call: CallData) {
   const channelId = await callChannelForPref();
   return {
+    id: callNotificationId(call.kind, call.id), // id estable → cancelable luego
     title:
       call.kind === 'pedido' ? `Nuevo pedido — ${call.ubicacion}` : `Llamado — ${call.ubicacion}`,
     body: call.tipo ? `Tipo: ${call.tipo}` : 'Desliza para atender',
@@ -160,6 +167,43 @@ export async function takePendingIncomingCall(): Promise<CallData | null> {
 export async function clearPendingIncomingCall(): Promise<void> {
   try {
     await AsyncStorage.removeItem(PENDING_CALL_KEY);
+  } catch {
+    // ignorar
+  }
+}
+
+/** Borra la llamada pendiente SOLO si corresponde a (kind,id) — cuando otro mesero
+ *  atendió ese llamado, para que no se reabra al montar. */
+export async function clearPendingIncomingCallIfMatches(
+  kind: CallData['kind'],
+  id: string | number,
+): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_CALL_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    if (String(obj.id) === String(id) && obj.kind === kind) {
+      await AsyncStorage.removeItem(PENDING_CALL_KEY);
+    }
+  } catch {
+    // ignorar
+  }
+}
+
+/** Cancela la notificación (display + snooze programado) de una llamada, p. ej.
+ *  cuando otro mesero la atendió. Idempotente: si no existe, es no-op. */
+export async function cancelCallNotification(
+  kind: CallData['kind'],
+  id: string | number,
+): Promise<void> {
+  const nid = callNotificationId(kind, id);
+  try {
+    await notifee.cancelNotification(nid);
+  } catch {
+    // ignorar
+  }
+  try {
+    await notifee.cancelTriggerNotification(nid);
   } catch {
     // ignorar
   }

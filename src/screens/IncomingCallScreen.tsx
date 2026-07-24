@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  AppState,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -10,10 +19,17 @@ import { useAuth } from '../context/AuthContext';
 import { SlideToAct } from '../components/SlideToAct';
 import { startCallVibration, stopCallVibration } from '../lib/notifications';
 import { scheduleSnooze, clearPendingIncomingCall } from '../lib/incomingCall';
+import { subscribeCallResolved } from '../lib/callResolution';
 import { setShowWhenLocked } from '../../modules/lock-screen';
 import { getSoundPref, getTonePref, TonePref } from '../lib/preferences';
 import { money } from '../lib/money';
-import { LLAMADO_ATENDIDO, PEDIDO_ESTADO_AL_ATENDER, RootStackParamList } from '../types/db';
+import {
+  LLAMADO_ATENDIDO,
+  LLAMADO_PENDIENTE,
+  PEDIDO_ESTADO_AL_ATENDER,
+  PEDIDO_PENDIENTE,
+  RootStackParamList,
+} from '../types/db';
 
 const RINGTONE = require('../../assets/ringtone.wav');
 const LOGO = require('../../assets/logo-zafari.png');
@@ -53,6 +69,13 @@ export function IncomingCallScreen() {
   // es 'sonido + vibración'). La vibración va siempre. El tono depende de la
   // preferencia guardada (suave / timbre / alarma).
   const player = useAudioPlayer(RINGTONE);
+
+  // true = esta pantalla se está resolviendo por MI propia acción (atender), para
+  // NO mostrar "Atendido por otro mesero" cuando llegue el evento de realtime que
+  // dispara mi propio UPDATE.
+  const resolvingSelfRef = useRef(false);
+  // Evita cerrar dos veces (realtime + chequeo de foreground pueden coincidir).
+  const closedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +164,8 @@ export function IncomingCallScreen() {
   };
 
   const cerrar = () => {
+    if (closedRef.current) return; // ya se cerró (evita doble cierre)
+    closedRef.current = true;
     releaseLockScreen();
     // Borrar la llamada pendiente del storage para no reabrirla en el próximo
     // arranque (ya la atendimos/ignoramos).
@@ -151,6 +176,54 @@ export function IncomingCallScreen() {
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate('Tabs');
   };
+
+  /** Cierre disparado porque OTRO mesero atendió (realtime). Mismo cleanup que
+   *  cerrar() + un aviso breve. La vibración y el ringtone se detienen en cerrar. */
+  const cerrarPorOtro = () => {
+    if (closedRef.current) return;
+    try {
+      ToastAndroid.show('Atendido por otro mesero', ToastAndroid.SHORT);
+    } catch {
+      // ToastAndroid solo existe en Android; si falla, cerramos igual.
+    }
+    cerrar();
+  };
+
+  /** Chequea en el server si este llamado/pedido ya dejó de estar pendiente (p. ej.
+   *  se atendió mientras estábamos en background y se perdió el evento realtime).
+   *  Solo cierra ante confirmación; sin red no hace nada. */
+  const checkResolved = async () => {
+    if (closedRef.current || resolvingSelfRef.current) return;
+    try {
+      const table = esPedido ? 'pedidos' : 'llamados';
+      const { data } = await supabase.from(table).select('estado').eq('id', id).maybeSingle();
+      const estado = String((data as { estado?: unknown } | null)?.estado ?? '');
+      const pendiente = esPedido ? PEDIDO_PENDIENTE : LLAMADO_PENDIENTE;
+      if (estado && estado !== pendiente) cerrarPorOtro();
+    } catch {
+      // sin red / error: NO cerramos (podría seguir pendiente)
+    }
+  };
+
+  // Cierre automático si OTRO mesero atiende ESTE mismo llamado/pedido.
+  useEffect(() => {
+    // 1) Evento de realtime (watcher global) para este kind+id.
+    const unsub = subscribeCallResolved((rKind, rId) => {
+      if (rKind === kind && String(rId) === String(id)) cerrarPorOtro();
+    });
+    // 2) Chequeo al montar: pudo haberse atendido ANTES de que abriéramos.
+    checkResolved();
+    // 3) Al volver a foreground: el evento de realtime pudo perderse mientras la
+    //    app estaba en background (caso pantalla sobre el bloqueo).
+    const appSub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') checkResolved();
+    });
+    return () => {
+      unsub();
+      appSub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Snooze 30 s: reprograma la MISMA llamada y cierra la pantalla. */
   const onSnooze = async () => {
@@ -175,19 +248,47 @@ export function IncomingCallScreen() {
   const onAtender = async () => {
     if (busy) return;
     setBusy(true);
+    // Mi propia acción: al llegar el evento realtime de MI update, no mostrar
+    // "Atendido por otro mesero".
+    resolvingSelfRef.current = true;
+    // Detener sonido/vibración YA (antes del update): si el update se cuelga, al
+    // menos deja de sonar de inmediato.
     stopCallVibration();
     stopRingtone();
     const table = kind === 'llamado' ? 'llamados' : 'pedidos';
     const nuevoEstado = kind === 'llamado' ? LLAMADO_ATENDIDO : PEDIDO_ESTADO_AL_ATENDER;
-    await supabase
-      .from(table)
-      .update({
-        estado: nuevoEstado,
-        atendido_at: new Date().toISOString(),
-        mesero_id: session?.id ?? null,
-      })
-      .eq('id', id);
-    cerrar();
+    try {
+      // Timeout de 6s: en gama baja la petición puede quedar colgada y sin esto el
+      // spinner nunca terminaba. .select('id') para saber si tocó la fila.
+      const { data, error } = (await Promise.race([
+        supabase
+          .from(table)
+          .update({
+            estado: nuevoEstado,
+            atendido_at: new Date().toISOString(),
+            mesero_id: session?.id ?? null,
+          })
+          .eq('id', id)
+          .select('id'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+      ])) as { data: unknown[] | null; error: { message: string } | null };
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.warn('[IncomingCall] atender error:', error.message);
+      } else if ((data?.length ?? 0) === 0) {
+        // 0 filas sin error = la policy RLS de UPDATE bloqueó el cambio.
+        // eslint-disable-next-line no-console
+        console.warn(`[IncomingCall] atender tocó 0 filas (¿RLS UPDATE en "${table}"?)`);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[IncomingCall] atender timeout/excepción:', e);
+    } finally {
+      // Pase lo que pase: liberar el spinner y cerrar (no congelar la UI). Si el
+      // update falló, el realtime/refetch corregirá el estado.
+      setBusy(false);
+      cerrar();
+    }
   };
 
   const esLlamado = kind === 'llamado';
