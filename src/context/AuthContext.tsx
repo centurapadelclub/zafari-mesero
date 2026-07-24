@@ -1,4 +1,13 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import {
@@ -53,6 +62,9 @@ interface AuthState {
   loading: boolean;
   signIn: (nombre: string, pin: string, opts?: { force?: boolean }) => Promise<SignInResult>;
   signOut: () => Promise<void>;
+  // Motivo por el que se cerró la sesión automáticamente (p. ej. otro teléfono
+  // tomó el control). Lo muestra el LoginScreen; se limpia al reintentar login.
+  kickedMessage: string | null;
 }
 
 const STORAGE_KEY = SESSION_STORAGE_KEY;
@@ -108,6 +120,12 @@ async function resolveZonasForMesero(meseroId: Id): Promise<{ zonaIds: Id[]; zon
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<MeseroSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [kickedMessage, setKickedMessage] = useState<string | null>(null);
+
+  // Ref siempre actualizada de la sesión, para leerla desde listeners (AppState)
+  // sin recrearlos ni capturar una sesión vieja.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     (async () => {
@@ -122,6 +140,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  /**
+   * Verifica que ESTE equipo siga siendo el dueño de la sesión del mesero. Se
+   * llama al arrancar con sesión y cada vez que la app vuelve al foreground.
+   *
+   * - Si el server dice que el dueño es OTRO device → alguien usó la salida de
+   *   emergencia en otro teléfono: cerramos sesión local y avisamos.
+   * - Si coincide → refrescamos el heartbeat (reclamar_sesion).
+   * - Si la consulta falla / da timeout / o el dueño es null → NO cerramos sesión
+   *   (podría ser solo falta de red). Solo cerramos ante confirmación REAL de que
+   *   otro device tomó el control.
+   */
+  const verifySessionOwnership = useCallback(async () => {
+    const actual = sessionRef.current;
+    if (actual?.id == null) return;
+    try {
+      const deviceId = await getDeviceId();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('meseros')
+          .select('session_device_id')
+          .eq('id', actual.id)
+          .limit(1)
+          .returns<{ session_device_id: string | null }[]>(),
+        8000,
+      );
+      if (error) return; // error del server: NO cerrar sesión
+      const owner = data?.[0]?.session_device_id;
+      if (owner != null && owner !== deviceId) {
+        // Confirmado: otro teléfono tomó el control.
+        setKickedMessage('Se inició sesión en otro teléfono');
+        setSession(null);
+        await AsyncStorage.removeItem(STORAGE_KEY);
+        stopForegroundService().catch(() => {});
+        // No liberamos la sesión ni borramos el token: ya no somos el dueño.
+        return;
+      }
+      // Somos el dueño (o owner null / ambiguo): refrescar heartbeat, no cerrar.
+      if (owner === deviceId) {
+        supabase
+          .rpc('reclamar_sesion', { p_mesero_id: actual.id, p_device_id: deviceId })
+          .then(undefined, () => {});
+      }
+    } catch {
+      // timeout / sin red: NO cerrar sesión (evita expulsar por mala señal).
+    }
+  }, []);
+
+  // Verificar propiedad cada vez que la app vuelve al foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') verifySessionOwnership();
+    });
+    return () => sub.remove();
+  }, [verifySessionOwnership]);
+
   // Registrar/actualizar el token FCM cuando hay un mesero logueado. Corre en CADA
   // arranque con sesión (login y restauración al reabrir la app), no solo en el
   // login: si el registro falló antes (permiso no concedido aún, sin red, Play
@@ -132,17 +205,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     savePushToken(session.id).catch(() => {
       // el error ya se registra en setPushDiag dentro de savePushToken
     });
-    // Heartbeat: refrescar la sesión en cada arranque vía RPC (reclamar_sesion).
-    // Así una sesión en uso no caduca (12 h), pero una abandonada sí. No
-    // bloqueante y con catch.
-    (async () => {
-      try {
-        const deviceId = await getDeviceId();
-        await supabase.rpc('reclamar_sesion', { p_mesero_id: session.id, p_device_id: deviceId });
-      } catch {
-        // ignorar: el heartbeat es best-effort
-      }
-    })();
+    // Verificar propiedad + heartbeat al arrancar con sesión: si otro teléfono
+    // tomó el control, cierra sesión local; si seguimos siendo el dueño, refresca
+    // session_at (reclamar_sesion). No bloqueante.
+    verifySessionOwnership();
     // Foreground Service: mantener el proceso vivo para recibir llamados aunque
     // la app esté en segundo plano (estilo WhatsApp). Delay de 500 ms para dar
     // tiempo a que notifee termine de inicializarse antes de arrancar el service.
@@ -180,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(
     async (nombre: string, pin: string, opts?: { force?: boolean }): Promise<SignInResult> => {
       const nombreLimpio = nombre.trim();
+      setKickedMessage(null); // el usuario está reintentando: limpiar el aviso
       if (!nombreLimpio) return { ok: false, error: 'Ingresa tu nombre.' };
       if (!/^\d{4}$/.test(pin)) return { ok: false, error: 'El PIN debe tener 4 dígitos.' };
 
@@ -300,8 +367,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthState>(
-    () => ({ session, loading, signIn, signOut }),
-    [session, loading, signIn, signOut],
+    () => ({ session, loading, signIn, signOut, kickedMessage }),
+    [session, loading, signIn, signOut, kickedMessage],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

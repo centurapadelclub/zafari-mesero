@@ -29,7 +29,7 @@ interface MeseroOption {
 }
 
 export function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, kickedMessage } = useAuth();
   const [nombre, setNombre] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +182,12 @@ export function LoginScreen() {
           <Text style={styles.subtitle}>App de meseros</Text>
         </View>
 
+        {kickedMessage ? (
+          <View style={styles.aviso}>
+            <Text style={styles.avisoText}>ℹ️ {kickedMessage}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.form}>
           <Text style={styles.label}>Nombre</Text>
           <Pressable
@@ -328,6 +334,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   forzarText: { color: '#D32F2F', fontSize: 15, fontWeight: '700' },
+  aviso: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+  },
+  avisoText: { color: '#8a5a00', fontSize: 14, fontWeight: '600', textAlign: 'center' },
   version: {
     position: 'absolute',
     bottom: 34,
