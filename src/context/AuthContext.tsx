@@ -132,17 +132,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     savePushToken(session.id).catch(() => {
       // el error ya se registra en setPushDiag dentro de savePushToken
     });
-    // Heartbeat: refrescar session_at en cada arranque con sesión, SOLO si este
-    // equipo sigue siendo el dueño. Así una sesión en uso no caduca (12 h), pero
-    // una abandonada sí. No bloqueante y con catch.
+    // Heartbeat: refrescar la sesión en cada arranque vía RPC (reclamar_sesion).
+    // Así una sesión en uso no caduca (12 h), pero una abandonada sí. No
+    // bloqueante y con catch.
     (async () => {
       try {
         const deviceId = await getDeviceId();
-        await supabase
-          .from('meseros')
-          .update({ session_at: new Date().toISOString() })
-          .eq('id', session.id)
-          .eq('session_device_id', deviceId);
+        await supabase.rpc('reclamar_sesion', { p_mesero_id: session.id, p_device_id: deviceId });
       } catch {
         // ignorar: el heartbeat es best-effort
       }
@@ -228,13 +224,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 3) Zonas asignadas: asignaciones.zona_id → zonas.nombre
         const { zonaIds, zonas } = await resolveZonasForMesero(mesero.id);
 
-        // 4) Reclamar la sesión para ESTE equipo (session_device_id + session_at).
+        // 4) Reclamar la sesión para ESTE equipo vía RPC (security definer: la app
+        //    NO tiene UPDATE directo sobre `meseros` porque ahí vive el `pin`).
         try {
           await withTimeout(
-            supabase
-              .from('meseros')
-              .update({ session_device_id: deviceId, session_at: new Date().toISOString() })
-              .eq('id', mesero.id),
+            supabase.rpc('reclamar_sesion', { p_mesero_id: mesero.id, p_device_id: deviceId }),
             8000,
           );
         } catch (e) {
@@ -276,20 +270,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (raw) {
       try {
         const prev = JSON.parse(raw) as MeseroSession;
-        // Liberar la sesión de una-por-equipo: poner en null session_device_id/at,
-        // SOLO si el equipo con la sesión sigue siendo este (para no pisar una
-        // sesión que otro teléfono ya tomó). Con timeout para no colgar el logout.
+        // Liberar la sesión vía RPC (security definer). La función valida
+        // internamente que el device_id coincida, así que no hace falta guardar
+        // con .eq(): si otro teléfono ya tomó la sesión, no la pisa. Con timeout
+        // para no colgar el logout.
         const deviceId = await getDeviceId();
         await Promise.race([
           Promise.all([
             deletePushToken(prev.id).catch(() => {}),
             (async () => {
               try {
-                await supabase
-                  .from('meseros')
-                  .update({ session_device_id: null, session_at: null })
-                  .eq('id', prev.id)
-                  .eq('session_device_id', deviceId);
+                await supabase.rpc('liberar_sesion', {
+                  p_mesero_id: prev.id,
+                  p_device_id: deviceId,
+                });
               } catch {
                 // best-effort: si falla, la sesión caduca sola a las 12 h
               }
